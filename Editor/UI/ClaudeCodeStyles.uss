@@ -125,9 +125,20 @@
 .cancel-btn:hover { background-color: #f9e2af; }
 
 /* ── Options ── */
-.options-row { flex-direction: row; align-items: center; margin-top: 4px; }
+.options-row { flex-direction: row; align-items: center; margin-top: 4px; flex-wrap: wrap; }
 .option-toggle { margin-right: 12px; }
 .option-toggle Label { color: #6c7086; font-size: 11px; }
+
+/* Model dropdown */
+.model-dropdown { width: 80px; margin-right: 12px; }
+.model-dropdown .unity-popup-field__input { background-color: #313244; border-color: #45475a; border-radius: 3px; color: #cdd6f4; font-size: 11px; min-height: 18px; padding: 1px 4px; }
+.model-dropdown .unity-popup-field__label { display: none; }
+
+/* Max turns */
+.max-turns-label { color: #6c7086; font-size: 11px; margin-right: 4px; min-width: 52px; }
+.max-turns-slider { width: 60px; margin-right: 8px; }
+.max-turns-slider .unity-base-slider__dragger { background-color: #89b4fa; border-radius: 4px; height: 10px; width: 10px; }
+.max-turns-slider .unity-base-slider__tracker { background-color: #45475a; height: 3px; border-radius: 2px; }
 
 /* ── Status ── */
 .status-row { flex-direction: row; align-items: center; margin-top: 4px; }

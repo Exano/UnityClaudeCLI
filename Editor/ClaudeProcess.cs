@@ -71,7 +71,8 @@ namespace ClaudeCode.Editor
             catch { return false; }
         }
 
-        public void SendMessage(string prompt, bool resume = false, bool skipPermissions = true)
+        public void SendMessage(string prompt, bool resume = false, bool skipPermissions = true,
+            string model = null, int maxTurns = 0)
         {
             if (CurrentState == ProcessState.Running)
             {
@@ -87,6 +88,10 @@ namespace ClaudeCode.Editor
                 var flags = "--output-format stream-json --verbose";
                 if (skipPermissions)
                     flags += " --dangerously-skip-permissions";
+                if (!string.IsNullOrEmpty(model))
+                    flags += $" --model {model}";
+                if (maxTurns > 0)
+                    flags += $" --max-turns {maxTurns}";
                 if (resume && !string.IsNullOrEmpty(LastSessionId)
                     && Guid.TryParse(LastSessionId, out _))
                     flags += $" --continue {LastSessionId}";

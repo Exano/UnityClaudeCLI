@@ -27,6 +27,11 @@ namespace ClaudeCode.Editor
         [SerializeField] private bool _continueConversation;
         [SerializeField] private string _lastSessionId;
         [SerializeField] private bool _wasRunning;
+        [SerializeField] private int _modelIndex;     // 0 = Sonnet, 1 = Opus
+        [SerializeField] private int _maxTurns = 8;   // 0 = unlimited
+
+        private static readonly string[] k_ModelChoices = { "Sonnet", "Opus" };
+        private static readonly string[] k_ModelIds = { "claude-sonnet-4-6", "claude-opus-4-6" };
 
         // UI elements (rebuilt each CreateGUI)
         private ScrollView _outputScroll;
@@ -37,6 +42,9 @@ namespace ClaudeCode.Editor
         private Label _usageLabel;
         private Toggle _autoApproveToggle;
         private Toggle _continueToggle;
+        private PopupField<string> _modelDropdown;
+        private SliderInt _maxTurnsSlider;
+        private Label _maxTurnsLabel;
 
         // Attachments
         private List<Attachment> _attachments = new List<Attachment>();
@@ -149,6 +157,28 @@ namespace ClaudeCode.Editor
             _autoApproveToggle.value = _autoApprove;
             _autoApproveToggle.RegisterValueChangedCallback(e => _autoApprove = e.newValue);
             optionsRow.Add(_autoApproveToggle);
+
+            // Model selector
+            _modelDropdown = new PopupField<string>(
+                new List<string>(k_ModelChoices), _modelIndex);
+            _modelDropdown.AddToClassList("model-dropdown");
+            _modelDropdown.RegisterValueChangedCallback(e =>
+                _modelIndex = Array.IndexOf(k_ModelChoices, e.newValue));
+            optionsRow.Add(_modelDropdown);
+
+            // Max turns
+            _maxTurnsLabel = new Label(_maxTurns == 0 ? "Turns: \u221e" : $"Turns: {_maxTurns}");
+            _maxTurnsLabel.AddToClassList("max-turns-label");
+            optionsRow.Add(_maxTurnsLabel);
+            _maxTurnsSlider = new SliderInt(0, 25) { value = _maxTurns };
+            _maxTurnsSlider.AddToClassList("max-turns-slider");
+            _maxTurnsSlider.RegisterValueChangedCallback(e =>
+            {
+                _maxTurns = e.newValue;
+                _maxTurnsLabel.text = _maxTurns == 0 ? "Turns: \u221e" : $"Turns: {_maxTurns}";
+            });
+            optionsRow.Add(_maxTurnsSlider);
+
             inputContainer.Add(optionsRow);
 
             // Status row
@@ -244,7 +274,8 @@ namespace ClaudeCode.Editor
             Record(ChatMessage.Role.User, displayText);
             AddUserBlock(displayText);
             BeginStreamingResponse();
-            _process.SendMessage(prompt, _continueConversation, _autoApprove);
+            _process.SendMessage(prompt, _continueConversation, _autoApprove,
+                k_ModelIds[_modelIndex], _maxTurns);
             SetRunning(true);
             _inputField.Focus();
         }
@@ -258,7 +289,8 @@ namespace ClaudeCode.Editor
             Record(ChatMessage.Role.User, text);
             AddUserBlock(text);
             BeginStreamingResponse();
-            _process.SendMessage(text, true, _autoApprove); // always continue for action buttons
+            _process.SendMessage(text, true, _autoApprove,
+                k_ModelIds[_modelIndex], _maxTurns); // always continue for action buttons
             SetRunning(true);
         }
 
