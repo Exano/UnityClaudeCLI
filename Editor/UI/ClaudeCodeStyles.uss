@@ -133,3 +133,14 @@
 .status-row { flex-direction: row; align-items: center; margin-top: 4px; }
 .status-label { color: #6c7086; font-size: 11px; padding-left: 2px; flex-shrink: 0; }
 .usage-label { color: #a6e3a1; font-size: 11px; margin-left: auto; -unity-text-align: middle-right; }
+
+/* ── Attachment chips ── */
+.attachment-chips { flex-direction: row; flex-wrap: wrap; margin-top: 4px; margin-bottom: 2px; }
+.attachment-chip { flex-direction: row; align-items: center; background-color: #313244; border-radius: 10px; padding: 2px 4px 2px 8px; margin-right: 4px; margin-bottom: 3px; border-width: 1px; border-color: #45475a; }
+.attachment-chip-label { color: #89b4fa; font-size: 11px; margin-right: 2px; }
+.attachment-chip-remove { background-color: transparent; color: #6c7086; border-width: 0; padding: 0 4px; font-size: 12px; min-width: 16px; min-height: 16px; -unity-text-align: middle-center; }
+.attachment-chip-remove:hover { color: #f38ba8; }
+
+/* ── Drag-and-drop ── */
+.drop-hover { border-width: 2px; border-color: #89b4fa; border-radius: 6px; background-color: rgba(137, 180, 250, 0.08); }
+.drop-hover .input-field #unity-text-input { border-color: #89b4fa; }

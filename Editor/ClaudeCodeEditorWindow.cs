@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using ClaudeCode.Editor.Rendering;
 using UnityEditor;
 using UnityEngine;
@@ -36,6 +37,10 @@ namespace ClaudeCode.Editor
         private Label _usageLabel;
         private Toggle _autoApproveToggle;
         private Toggle _continueToggle;
+
+        // Attachments
+        private List<Attachment> _attachments = new List<Attachment>();
+        private VisualElement _attachmentChips;
 
         // Transient state
         private ClaudeProcess _process;
@@ -158,7 +163,16 @@ namespace ClaudeCode.Editor
             statusRow.Add(_usageLabel);
             inputContainer.Add(statusRow);
 
+            // Attachment chips row (between input and options)
+            _attachmentChips = new VisualElement();
+            _attachmentChips.AddToClassList("attachment-chips");
+            _attachmentChips.style.display = DisplayStyle.None;
+            inputContainer.Insert(inputContainer.IndexOf(optionsRow), _attachmentChips);
+
             root.Add(inputContainer);
+
+            // Drag-and-drop: register on the whole input area
+            DragDropHandler.Register(inputContainer, _statusLabel, OnAttachmentAdded);
 
             RebuildFromHistory();
             _inputField.schedule.Execute(() => _inputField.Focus());
@@ -218,10 +232,19 @@ namespace ClaudeCode.Editor
 
             _inputField.value = "";
             _usageLabel.style.display = DisplayStyle.None;
-            Record(ChatMessage.Role.User, text);
-            AddUserBlock(text);
+
+            // Show the user's typed text in chat (without attachment noise)
+            var displayText = text;
+            if (_attachments.Count > 0)
+                displayText += $"  [+{_attachments.Count} attached]";
+
+            // Build the actual prompt with compact references
+            var prompt = BuildPromptWithAttachments(text);
+
+            Record(ChatMessage.Role.User, displayText);
+            AddUserBlock(displayText);
             BeginStreamingResponse();
-            _process.SendMessage(text, _continueConversation, _autoApprove);
+            _process.SendMessage(prompt, _continueConversation, _autoApprove);
             SetRunning(true);
             _inputField.Focus();
         }
@@ -251,6 +274,8 @@ namespace ClaudeCode.Editor
             if (_process != null) _process.LastSessionId = null;
             _usageLabel.text = "";
             _usageLabel.style.display = DisplayStyle.None;
+            _attachments.Clear();
+            RebuildAttachmentChips();
         }
 
         // ── Block builders ──
@@ -325,6 +350,73 @@ namespace ClaudeCode.Editor
         {
             _outputScroll?.schedule.Execute(() =>
                 _outputScroll.scrollOffset = new Vector2(0, float.MaxValue));
+        }
+
+        // ── Attachments ──
+
+        private void OnAttachmentAdded(Attachment attachment)
+        {
+            // Deduplicate by path
+            foreach (var a in _attachments)
+                if (a.Path == attachment.Path && a.DisplayName == attachment.DisplayName) return;
+
+            _attachments.Add(attachment);
+            RebuildAttachmentChips();
+            _inputField.Focus();
+        }
+
+        private void RemoveAttachment(int index)
+        {
+            if (index >= 0 && index < _attachments.Count)
+            {
+                _attachments.RemoveAt(index);
+                RebuildAttachmentChips();
+            }
+        }
+
+        private void RebuildAttachmentChips()
+        {
+            _attachmentChips.Clear();
+            if (_attachments.Count == 0)
+            {
+                _attachmentChips.style.display = DisplayStyle.None;
+                return;
+            }
+
+            _attachmentChips.style.display = DisplayStyle.Flex;
+            for (int i = 0; i < _attachments.Count; i++)
+            {
+                var idx = i; // capture for closure
+                var a = _attachments[i];
+
+                var chip = new VisualElement();
+                chip.AddToClassList("attachment-chip");
+
+                var label = new Label($"{a.TypeLabel}: {a.DisplayName}");
+                label.AddToClassList("attachment-chip-label");
+                chip.Add(label);
+
+                var removeBtn = new Button(() => RemoveAttachment(idx)) { text = "\u00d7" };
+                removeBtn.AddToClassList("attachment-chip-remove");
+                chip.Add(removeBtn);
+
+                _attachmentChips.Add(chip);
+            }
+        }
+
+        private string BuildPromptWithAttachments(string userText)
+        {
+            if (_attachments.Count == 0) return userText;
+
+            var sb = new StringBuilder();
+            sb.Append(userText);
+            sb.Append("\n\nAttached references (use Read/Grep to inspect):");
+            for (int i = 0; i < _attachments.Count; i++)
+                sb.Append($"\n[+{i + 1}] {_attachments[i].ToPromptReference()}");
+
+            _attachments.Clear();
+            RebuildAttachmentChips();
+            return sb.ToString();
         }
 
         private void Record(ChatMessage.Role role, string text)
