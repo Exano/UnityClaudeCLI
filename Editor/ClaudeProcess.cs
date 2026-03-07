@@ -206,7 +206,9 @@ namespace ClaudeCode.Editor
             line = line.Trim();
             if (!line.StartsWith("{"))
             {
-                if (line.Length > 0) Enqueue(OutputChunk.Kind.Text, line + "\n");
+                // Suppress bare UUIDs (session IDs) that the CLI sometimes emits before JSON
+                if (line.Length > 0 && !Guid.TryParse(line, out _))
+                    Enqueue(OutputChunk.Kind.Text, line + "\n");
                 return;
             }
             try
