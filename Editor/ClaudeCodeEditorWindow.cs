@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using ClaudeCode.Editor.Agents;
 using ClaudeCode.Editor.Rendering;
 using UnityEditor;
 using UnityEngine;
@@ -24,12 +25,13 @@ namespace ClaudeCode.Editor
         // Serialized state survives domain reload
         [SerializeField] private List<ChatMessage> _messageHistory = new List<ChatMessage>();
         [SerializeField] private bool _autoApprove = true;
-        [SerializeField] private bool _continueConversation;
+        [SerializeField] private bool _continueConversation = true;
         [SerializeField] private string _lastSessionId;
         [SerializeField] private bool _wasRunning;
         [SerializeField] private int _modelIndex;     // 0 = Sonnet, 1 = Opus
         [SerializeField] private int _maxTurns = 8;   // 0 = unlimited
 
+        private static Texture2D s_tabIcon;
         private static readonly string[] k_ModelChoices = { "Sonnet", "Opus" };
         private static readonly string[] k_ModelIds = { "claude-sonnet-4-6", "claude-opus-4-6" };
 
@@ -50,6 +52,12 @@ namespace ClaudeCode.Editor
         private List<Attachment> _attachments = new List<Attachment>();
         private VisualElement _attachmentChips;
 
+        // Agents
+        private List<AgentDefinition> _selectedAgents = new List<AgentDefinition>();
+        private HashSet<string> _pinnedAgents = new HashSet<string>(); // manually toggled
+        private VisualElement _agentChips;
+        private string _lastAutoDetectInput;
+
         // Transient state
         private ClaudeProcess _process;
         private MessageGroup _currentGroup;
@@ -59,12 +67,62 @@ namespace ClaudeCode.Editor
         public static void ShowWindow()
         {
             var window = GetWindow<ClaudeCodeEditorWindow>();
-            window.titleContent = new GUIContent("Claude Code");
+            window.titleContent = new GUIContent("Claude Code", GenerateTabIcon());
             window.minSize = new Vector2(450, 300);
+        }
+
+        /// <summary>16x16 terminal-prompt icon in Catppuccin purple. Cached in static field.</summary>
+        private static Texture2D GenerateTabIcon()
+        {
+            if (s_tabIcon != null) return s_tabIcon;
+            // 16x16, each char: . = transparent, # = purple (cba6f7), o = dim (585b70)
+            var rows = new[]
+            {
+                "................",
+                "................",
+                "..##............",
+                "...##...........",
+                "....##..........",
+                ".....##.........",
+                "......##........",
+                ".......##.......",
+                "......##........",
+                ".....##.........",
+                "....##..........",
+                "...##...........",
+                "..##............",
+                ".........oooooo.",
+                "................",
+                "................",
+            };
+
+            var purple = new Color(203/255f, 166/255f, 247/255f, 1f);
+            var dim    = new Color(88/255f, 91/255f, 112/255f, 1f);
+            var clear  = new Color(0, 0, 0, 0);
+
+            var tex = new Texture2D(16, 16, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            for (int y = 0; y < 16; y++)
+            {
+                var row = rows[15 - y]; // Texture2D is bottom-up
+                for (int x = 0; x < 16; x++)
+                {
+                    var c = x < row.Length ? row[x] : '.';
+                    tex.SetPixel(x, y, c == '#' ? purple : c == 'o' ? dim : clear);
+                }
+            }
+            tex.Apply();
+            s_tabIcon = tex;
+            return s_tabIcon;
         }
 
         private void OnEnable()
         {
+            AgentDiscovery.Refresh();
             _process = new ClaudeProcess(Path.GetDirectoryName(Application.dataPath));
             if (!string.IsNullOrEmpty(_lastSessionId))
                 _process.LastSessionId = _lastSessionId;
@@ -130,6 +188,7 @@ namespace ClaudeCode.Editor
             _inputField.multiline = true;
             _inputField.AddToClassList("input-field");
             _inputField.RegisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
+            _inputField.RegisterValueChangedCallback(OnInputChanged);
             inputRow.Add(_inputField);
 
             var btnContainer = new VisualElement();
@@ -166,10 +225,12 @@ namespace ClaudeCode.Editor
                 _modelIndex = Array.IndexOf(k_ModelChoices, e.newValue));
             optionsRow.Add(_modelDropdown);
 
-            // Max turns
+            // Max turns (grouped as one pill)
+            var maxTurnsGroup = new VisualElement();
+            maxTurnsGroup.AddToClassList("max-turns-group");
             _maxTurnsLabel = new Label(_maxTurns == 0 ? "Turns: \u221e" : $"Turns: {_maxTurns}");
             _maxTurnsLabel.AddToClassList("max-turns-label");
-            optionsRow.Add(_maxTurnsLabel);
+            maxTurnsGroup.Add(_maxTurnsLabel);
             _maxTurnsSlider = new SliderInt(0, 25) { value = _maxTurns };
             _maxTurnsSlider.AddToClassList("max-turns-slider");
             _maxTurnsSlider.RegisterValueChangedCallback(e =>
@@ -177,7 +238,8 @@ namespace ClaudeCode.Editor
                 _maxTurns = e.newValue;
                 _maxTurnsLabel.text = _maxTurns == 0 ? "Turns: \u221e" : $"Turns: {_maxTurns}";
             });
-            optionsRow.Add(_maxTurnsSlider);
+            maxTurnsGroup.Add(_maxTurnsSlider);
+            optionsRow.Add(maxTurnsGroup);
 
             inputContainer.Add(optionsRow);
 
@@ -199,12 +261,19 @@ namespace ClaudeCode.Editor
             _attachmentChips.style.display = DisplayStyle.None;
             inputContainer.Insert(inputContainer.IndexOf(optionsRow), _attachmentChips);
 
+            // Agent chips row (between attachments and options)
+            _agentChips = new VisualElement();
+            _agentChips.AddToClassList("agent-chips");
+            _agentChips.style.display = DisplayStyle.None;
+            inputContainer.Insert(inputContainer.IndexOf(optionsRow), _agentChips);
+
             root.Add(inputContainer);
 
             // Drag-and-drop: register on the whole input area
             DragDropHandler.Register(inputContainer, _statusLabel, OnAttachmentAdded);
 
             RebuildFromHistory();
+            RebuildAgentChips();
             _inputField.schedule.Execute(() => _inputField.Focus());
         }
 
@@ -263,13 +332,19 @@ namespace ClaudeCode.Editor
             _inputField.value = "";
             _usageLabel.style.display = DisplayStyle.None;
 
-            // Show the user's typed text in chat (without attachment noise)
+            // Show the user's typed text in chat (without attachment/agent noise)
             var displayText = text;
             if (_attachments.Count > 0)
                 displayText += $"  [+{_attachments.Count} attached]";
+            if (_selectedAgents.Count > 0)
+            {
+                var names = new List<string>();
+                foreach (var a in _selectedAgents) names.Add(a.Name);
+                displayText += $"  [{string.Join(", ", names)}]";
+            }
 
-            // Build the actual prompt with compact references
-            var prompt = BuildPromptWithAttachments(text);
+            // Build the actual prompt: agent context + user text + attachments
+            var prompt = BuildPromptWithAgentContext(BuildPromptWithAttachments(text));
 
             Record(ChatMessage.Role.User, displayText);
             AddUserBlock(displayText);
@@ -286,10 +361,11 @@ namespace ClaudeCode.Editor
         {
             if (_process == null || _process.CurrentState == ClaudeProcess.ProcessState.Running) return;
             _usageLabel.style.display = DisplayStyle.None;
+            var prompt = BuildPromptWithAgentContext(text);
             Record(ChatMessage.Role.User, text);
             AddUserBlock(text);
             BeginStreamingResponse();
-            _process.SendMessage(text, true, _autoApprove,
+            _process.SendMessage(prompt, true, _autoApprove,
                 k_ModelIds[_modelIndex], _maxTurns); // always continue for action buttons
             SetRunning(true);
         }
@@ -308,6 +384,10 @@ namespace ClaudeCode.Editor
             _usageLabel.style.display = DisplayStyle.None;
             _attachments.Clear();
             RebuildAttachmentChips();
+            _selectedAgents.Clear();
+            _pinnedAgents.Clear();
+            _lastAutoDetectInput = null;
+            RebuildAgentChips();
         }
 
         // ── Block builders ──
@@ -449,6 +529,129 @@ namespace ClaudeCode.Editor
             _attachments.Clear();
             RebuildAttachmentChips();
             return sb.ToString();
+        }
+
+        // ── Agents ──
+
+        private void OnInputChanged(ChangeEvent<string> evt)
+        {
+            var text = evt.newValue?.Trim();
+            if (string.IsNullOrEmpty(text))
+            {
+                // Clear auto-detected agents but keep pinned ones
+                _selectedAgents.RemoveAll(a => !_pinnedAgents.Contains(a.Name));
+                _lastAutoDetectInput = null;
+                RebuildAgentChips();
+                return;
+            }
+
+            // Only re-detect when input has changed significantly
+            if (_lastAutoDetectInput != null &&
+                Math.Abs(text.Length - _lastAutoDetectInput.Length) < 8)
+                return;
+
+            _lastAutoDetectInput = text;
+            var detected = AgentDiscovery.AutoDetect(text);
+
+            // Remove old auto-detected agents (keep pinned), then add new detections
+            _selectedAgents.RemoveAll(a => !_pinnedAgents.Contains(a.Name));
+            foreach (var agent in detected)
+            {
+                bool alreadySelected = false;
+                foreach (var s in _selectedAgents)
+                {
+                    if (s.Name == agent.Name) { alreadySelected = true; break; }
+                }
+                if (!alreadySelected)
+                    _selectedAgents.Add(agent);
+            }
+            RebuildAgentChips();
+        }
+
+        private void ToggleAgentByName(string name)
+        {
+            for (int i = 0; i < _selectedAgents.Count; i++)
+            {
+                if (_selectedAgents[i].Name == name)
+                {
+                    _selectedAgents.RemoveAt(i);
+                    _pinnedAgents.Remove(name);
+                    RebuildAgentChips();
+                    return;
+                }
+            }
+            // Not found — manually add (pin) it
+            foreach (var a in AgentDiscovery.GetAgents())
+            {
+                if (a.Name == name)
+                {
+                    _selectedAgents.Add(a);
+                    _pinnedAgents.Add(name);
+                    RebuildAgentChips();
+                    return;
+                }
+            }
+        }
+
+        private void RebuildAgentChips()
+        {
+            _agentChips.Clear();
+            var allAgents = AgentDiscovery.GetAgents();
+
+            if (allAgents.Count == 0 && _selectedAgents.Count == 0)
+            {
+                _agentChips.style.display = DisplayStyle.None;
+                return;
+            }
+
+            _agentChips.style.display = DisplayStyle.Flex;
+
+            // Show selected agents as active chips
+            foreach (var a in _selectedAgents)
+            {
+                var name = a.Name;
+                var chip = new VisualElement();
+                chip.AddToClassList("agent-chip");
+                chip.AddToClassList("agent-chip--active");
+
+                var label = new Label(name);
+                label.AddToClassList("agent-chip-label");
+                chip.Add(label);
+
+                var removeBtn = new Button(() => ToggleAgentByName(name)) { text = "\u00d7" };
+                removeBtn.AddToClassList("agent-chip-remove");
+                chip.Add(removeBtn);
+
+                _agentChips.Add(chip);
+            }
+
+            // Show unselected agents as inactive chips (add button)
+            foreach (var a in allAgents)
+            {
+                bool selected = false;
+                foreach (var s in _selectedAgents)
+                {
+                    if (s.Name == a.Name) { selected = true; break; }
+                }
+                if (selected) continue;
+
+                var name = a.Name;
+                var chip = new Button(() => ToggleAgentByName(name));
+                chip.AddToClassList("agent-chip");
+                chip.AddToClassList("agent-chip--inactive");
+                chip.text = $"+ {name}";
+
+                _agentChips.Add(chip);
+            }
+        }
+
+        private string BuildPromptWithAgentContext(string prompt)
+        {
+            var context = AgentDiscovery.BuildContext(_selectedAgents);
+            if (string.IsNullOrEmpty(context))
+                return prompt;
+
+            return $"{context}\n\n---\n\n{prompt}";
         }
 
         private void Record(ChatMessage.Role role, string text)

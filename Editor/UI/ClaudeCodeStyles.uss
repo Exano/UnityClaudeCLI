@@ -125,25 +125,45 @@
 .cancel-btn:hover { background-color: #f9e2af; }
 
 /* ── Options ── */
-.options-row { flex-direction: row; align-items: center; margin-top: 4px; flex-wrap: wrap; }
-.option-toggle { margin-right: 12px; }
-.option-toggle Label { color: #6c7086; font-size: 11px; }
+.options-row { flex-direction: row; align-items: center; margin-top: 6px; flex-wrap: wrap; }
 
-/* Model dropdown */
-.model-dropdown { width: 80px; margin-right: 12px; }
-.model-dropdown .unity-popup-field__input { background-color: #313244; border-color: #45475a; border-radius: 3px; color: #cdd6f4; font-size: 11px; min-height: 18px; padding: 1px 4px; }
+/* Toggle pills — checkbox tight against label */
+.option-toggle { flex-direction: row; align-items: center; margin-right: 4px; padding: 2px 8px 2px 4px; background-color: #313244; border-radius: 10px; border-width: 1px; border-color: #45475a; }
+.option-toggle:hover { border-color: #585b70; }
+.option-toggle .unity-toggle__input { flex-direction: row; align-items: center; }
+.option-toggle .unity-toggle__checkmark { width: 12px; height: 12px; margin-right: 4px; border-radius: 3px; background-color: #45475a; border-width: 1px; border-color: #585b70; }
+.option-toggle:checked .unity-toggle__checkmark { background-color: #a6e3a1; border-color: #a6e3a1; }
+.option-toggle Label { color: #6c7086; font-size: 11px; padding: 0; margin: 0; }
+.option-toggle:checked Label { color: #a6e3a1; }
+
+/* Model dropdown pill */
+.model-dropdown { margin-right: 4px; }
+.model-dropdown .unity-popup-field__input { background-color: #313244; border-color: #45475a; border-radius: 10px; color: #cdd6f4; font-size: 11px; min-height: 20px; padding: 1px 8px; }
+.model-dropdown .unity-popup-field__input:hover { border-color: #585b70; }
 .model-dropdown .unity-popup-field__label { display: none; }
 
-/* Max turns */
-.max-turns-label { color: #6c7086; font-size: 11px; margin-right: 4px; min-width: 52px; }
-.max-turns-slider { width: 60px; margin-right: 8px; }
-.max-turns-slider .unity-base-slider__dragger { background-color: #89b4fa; border-radius: 4px; height: 10px; width: 10px; }
+/* Max turns pill */
+.max-turns-group { flex-direction: row; align-items: center; background-color: #313244; border-radius: 10px; border-width: 1px; border-color: #45475a; padding: 1px 8px 1px 8px; margin-right: 4px; }
+.max-turns-label { color: #6c7086; font-size: 11px; margin-right: 4px; min-width: 46px; padding: 0; }
+.max-turns-slider { width: 50px; }
+.max-turns-slider .unity-base-slider__dragger { background-color: #89b4fa; border-radius: 5px; height: 10px; width: 10px; margin-top: -4px; }
 .max-turns-slider .unity-base-slider__tracker { background-color: #45475a; height: 3px; border-radius: 2px; }
 
 /* ── Status ── */
 .status-row { flex-direction: row; align-items: center; margin-top: 4px; }
 .status-label { color: #6c7086; font-size: 11px; padding-left: 2px; flex-shrink: 0; }
 .usage-label { color: #a6e3a1; font-size: 11px; margin-left: auto; -unity-text-align: middle-right; }
+
+/* ── Agent chips ── */
+.agent-chips { flex-direction: row; flex-wrap: wrap; margin-top: 4px; margin-bottom: 2px; }
+.agent-chip { flex-direction: row; align-items: center; border-radius: 10px; padding: 2px 4px 2px 8px; margin-right: 4px; margin-bottom: 3px; border-width: 1px; }
+.agent-chip--active { background-color: rgba(203, 166, 247, 0.15); border-color: #cba6f7; }
+.agent-chip--active .agent-chip-label { color: #cba6f7; }
+.agent-chip--inactive { background-color: #313244; border-color: #45475a; color: #6c7086; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.agent-chip--inactive:hover { border-color: #89b4fa; color: #89b4fa; }
+.agent-chip-label { color: #cba6f7; font-size: 11px; margin-right: 2px; }
+.agent-chip-remove { background-color: transparent; color: #6c7086; border-width: 0; padding: 0 4px; font-size: 12px; min-width: 16px; min-height: 16px; -unity-text-align: middle-center; }
+.agent-chip-remove:hover { color: #f38ba8; }
 
 /* ── Attachment chips ── */
 .attachment-chips { flex-direction: row; flex-wrap: wrap; margin-top: 4px; margin-bottom: 2px; }
