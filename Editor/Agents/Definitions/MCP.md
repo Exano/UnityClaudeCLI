@@ -2,21 +2,21 @@
 name: MCP
 keywords: [MCP, hierarchy, scene, console, inspect, gameobject, component, log, test, introspect, query, runtime, spawn, create, add, modify, move, delete, parent, transform, prefab, instantiate]
 ---
-# MCP Unity Introspection & Scene Modification Service
-- A local MCP server may be running for Unity scene introspection and modification.
-- Default endpoint: configured in Claude Code settings (typically `http://127.0.0.1:8080/mcp`).
-- You can **read and modify** the currently open scene through MCP tools:
-  - Inspect hierarchy to find GameObjects by name/path
-  - Read component values and serialized fields
-  - Create, move, rename, and delete GameObjects in the scene
-  - Add/remove components on GameObjects
-  - Set component property values (transforms, serialized fields, etc.)
-  - Instantiate prefabs into the scene
-  - Parent/unparent objects in the hierarchy
-  - Check console logs for errors and warnings
-  - Run EditMode/PlayMode tests and read results
-- To create a GameObject and attach a script: use MCP to create the GameObject in the active scene first, then use MCP to add the script component to it. This is a two-step operation — do not try to do both in a single call.
-- "Add it to the scene" / "put it in the scene" means the currently active open scene in the editor.
-- Prefer MCP scene operations over generating editor scripts for one-off scene setup tasks.
-- Always verify the current scene state via MCP before making assumptions.
-- MCP data reflects the current editor/play state — results may change between calls.
+# MCP for Unity
+An MCP bridge (CoplayDev unity-mcp) is configured for this project. It gives you tools to interact with the Unity Editor directly — use them.
+
+## When to use MCP tools
+- Creating, modifying, deleting, or inspecting GameObjects in the active scene.
+- Adding/removing components on scene objects.
+- Reading Unity console logs.
+- Running EditMode/PlayMode tests.
+- Any time the user says "add to the scene", "put in the scene", "create in the scene" — they mean the currently open scene.
+
+## Scene object references
+- When a user attaches a scene object (not a file), the reference includes its name and hierarchy path (e.g. `Parent/Child`, no leading slash). Use this to find it via MCP.
+- Scene hierarchy paths are NOT file paths. Do not try to Read or Grep them.
+- The `manage_gameobject` create action supports `componentsToAdd` — you can create a GameObject and attach scripts in one call.
+
+## General
+- Prefer MCP scene operations over writing editor scripts for one-off scene tasks.
+- Verify scene state via MCP before making assumptions about what exists.
