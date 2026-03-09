@@ -71,6 +71,71 @@ namespace ClaudeCode.Editor
             catch { return false; }
         }
 
+        /// <summary>
+        /// Resolves the MCP endpoint URL from the unity-mcp EditorPrefs,
+        /// falling back to the default http://127.0.0.1:8080/mcp.
+        /// </summary>
+        public static string GetMcpUrl()
+        {
+            const string prefKey = "MCPForUnity.HttpUrl";
+            const string defaultBase = "http://127.0.0.1:8080";
+            var baseUrl = UnityEditor.EditorPrefs.GetString(prefKey, "");
+            if (string.IsNullOrEmpty(baseUrl))
+                baseUrl = defaultBase;
+            baseUrl = baseUrl.TrimEnd('/');
+            if (baseUrl.EndsWith("/mcp", StringComparison.OrdinalIgnoreCase))
+                return baseUrl;
+            return baseUrl + "/mcp";
+        }
+
+        /// <summary>
+        /// Checks whether the Unity MCP server is registered with Claude CLI
+        /// and registers it automatically if not. Returns a status message
+        /// or null if already registered.
+        /// </summary>
+        public string EnsureMcpRegistered(string mcpUrl = null)
+        {
+            if (mcpUrl == null)
+                mcpUrl = GetMcpUrl();
+            try
+            {
+                // Check if already registered
+                var listPsi = CreateShellProcessInfo("claude mcp list");
+                listPsi.RedirectStandardInput = false;
+                listPsi.Environment.Remove("CLAUDECODE");
+                listPsi.Environment.Remove("CLAUDE_CODE_ENTRYPOINT");
+                string listOutput;
+                using (var proc = Process.Start(listPsi))
+                {
+                    listOutput = proc.StandardOutput.ReadToEnd();
+                    proc.WaitForExit(10000);
+                }
+
+                // Look for any existing unity MCP entry pointing at our URL
+                if (listOutput != null && listOutput.Contains(mcpUrl))
+                    return null; // already registered
+
+                // Register the MCP server
+                var addCmd = $"claude mcp add --scope local --transport http unity {mcpUrl}";
+                var addPsi = CreateShellProcessInfo(addCmd);
+                addPsi.RedirectStandardInput = false;
+                addPsi.Environment.Remove("CLAUDECODE");
+                addPsi.Environment.Remove("CLAUDE_CODE_ENTRYPOINT");
+                using (var proc = Process.Start(addPsi))
+                {
+                    proc.WaitForExit(10000);
+                    if (proc.ExitCode == 0)
+                        return $"Registered Unity MCP server at {mcpUrl}";
+                    var err = proc.StandardError.ReadToEnd();
+                    return $"Failed to register MCP server: {err?.Trim()}";
+                }
+            }
+            catch (Exception e)
+            {
+                return $"MCP registration check failed: {e.Message}";
+            }
+        }
+
         public void SendMessage(string prompt, bool resume = false, bool skipPermissions = true,
             string model = null, int maxTurns = 0)
         {

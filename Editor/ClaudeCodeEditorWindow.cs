@@ -128,6 +128,18 @@ namespace ClaudeCode.Editor
                 _process.LastSessionId = _lastSessionId;
             EditorApplication.update += PollProcessOutput;
 
+            // Auto-register MCP server if Claude CLI is available
+            if (_process.IsClaudeAvailable())
+            {
+                var mcpStatus = _process.EnsureMcpRegistered();
+                if (mcpStatus != null)
+                    _messageHistory.Add(new ChatMessage
+                    {
+                        role = ChatMessage.Role.System,
+                        text = mcpStatus
+                    });
+            }
+
             // Recover from domain reload that killed a running process
             if (_wasRunning)
             {
