@@ -28,10 +28,12 @@
 /* Claude message (history replay) */
 .claude-message { padding-left: 8px; border-left-width: 2px; border-left-color: #cba6f7; margin-bottom: 8px; }
 
-/* ── Thinking foldout ── */
+/* ── Thinking ── */
+.thinking-container { margin-bottom: 4px; }
+.thinking-item { color: #585b70; font-size: 11px; white-space: normal; padding: 2px 0 2px 8px; border-left-width: 2px; border-left-color: #45475a; margin-bottom: 2px; }
+.thinking-active { color: #7f849c; border-left-color: #f9e2af; }
 .thinking-foldout { margin-bottom: 4px; }
 .thinking-foldout > .unity-foldout__toggle > .unity-foldout__text { color: #585b70; font-size: 11px; -unity-font-style: italic; }
-.thinking-text { color: #585b70; font-size: 11px; white-space: normal; padding-left: 4px; }
 
 /* ── Tools foldout ── */
 .tools-foldout { margin-bottom: 6px; }
@@ -114,11 +116,11 @@
 
 .input-container { background-color: #181825; padding: 8px; border-top-width: 1px; border-top-color: #313244; flex-shrink: 0; }
 .input-row { flex-direction: row; align-items: flex-end; }
-.input-field { flex-grow: 1; margin-right: 6px; }
+.input-field { flex-grow: 1; flex-shrink: 1; margin-right: 6px; overflow: hidden; }
 .input-field #unity-text-input { background-color: #313244; color: #cdd6f4; border-width: 1px; border-color: #45475a; border-radius: 4px; padding: 5px 8px; font-size: 13px; min-height: 36px; max-height: 120px; white-space: normal; }
 .input-field:focus #unity-text-input { border-color: #cba6f7; }
 
-.btn-container { flex-direction: row; }
+.btn-container { flex-direction: row; flex-shrink: 0; }
 .send-btn { background-color: #cba6f7; color: #1e1e2e; border-width: 0; border-radius: 4px; padding: 5px 16px; font-size: 12px; -unity-font-style: bold; min-height: 26px; }
 .send-btn:hover { background-color: #b4befe; }
 .cancel-btn { background-color: #fab387; color: #1e1e2e; border-width: 0; border-radius: 4px; padding: 5px 14px; font-size: 12px; -unity-font-style: bold; min-height: 26px; }

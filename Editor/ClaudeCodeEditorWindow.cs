@@ -30,6 +30,8 @@ namespace ClaudeCode.Editor
         [SerializeField] private bool _wasRunning;
         [SerializeField] private int _modelIndex;     // 0 = Sonnet, 1 = Opus
         [SerializeField] private int _maxTurns = 8;   // 0 = unlimited
+        [SerializeField] private string _pendingInputText;               // survives domain reload
+        [SerializeField] private List<Attachment> _savedAttachments = new List<Attachment>();
 
         private static Texture2D s_tabIcon;
         private static readonly string[] k_ModelChoices = { "Sonnet", "Opus" };
@@ -58,10 +60,12 @@ namespace ClaudeCode.Editor
         private VisualElement _agentChips;
         private string _lastAutoDetectInput;
 
-        // Transient state
+        // Transient state (reset each domain)
         private ClaudeProcess _process;
         private MessageGroup _currentGroup;
         private float _processExitedAt;
+        private bool _pendingAutoContinue;
+        private bool _reloadLocked; // tracks whether we hold the lock in THIS AppDomain
 
         [MenuItem("Window/Claude Code %#k")]
         public static void ShowWindow()
@@ -144,13 +148,15 @@ namespace ClaudeCode.Editor
             if (_wasRunning)
             {
                 _wasRunning = false;
-                // Re-allow refresh since the process is gone
+                // Lock state does not survive domain reload — no Unlock needed here.
+                // Just ensure auto-refresh is allowed (safe to call even without prior Disallow).
                 AssetDatabase.AllowAutoRefresh();
                 _continueConversation = true;
+                _pendingAutoContinue = true;
                 _messageHistory.Add(new ChatMessage
                 {
                     role = ChatMessage.Role.System,
-                    text = "[Domain reload interrupted the running task. Continue is enabled \u2014 send a message to resume.]"
+                    text = "[Domain reload interrupted the running task. Automatically continuing\u2026]"
                 });
             }
         }
@@ -158,8 +164,16 @@ namespace ClaudeCode.Editor
         private void OnDisable()
         {
             EditorApplication.update -= PollProcessOutput;
-            if (_wasRunning)
+            if (_reloadLocked)
+            {
+                _reloadLocked = false;
                 AssetDatabase.AllowAutoRefresh();
+                EditorApplication.UnlockReloadAssemblies();
+            }
+            // Preserve input text and attachments across domain reload
+            if (_inputField != null)
+                _pendingInputText = _inputField.value;
+            _savedAttachments = new List<Attachment>(_attachments);
             _process?.Dispose();
             _process = null;
         }
@@ -286,7 +300,42 @@ namespace ClaudeCode.Editor
 
             RebuildFromHistory();
             RebuildAgentChips();
+
+            // Restore input text and attachments from before domain reload
+            if (!string.IsNullOrEmpty(_pendingInputText))
+            {
+                _inputField.SetValueWithoutNotify(_pendingInputText);
+                _pendingInputText = null;
+            }
+            if (_savedAttachments != null && _savedAttachments.Count > 0)
+            {
+                _attachments = new List<Attachment>(_savedAttachments);
+                _savedAttachments.Clear();
+                RebuildAttachmentChips();
+            }
+
             _inputField.schedule.Execute(() => _inputField.Focus());
+
+            // Auto-continue after domain reload once UI is ready
+            if (_pendingAutoContinue)
+            {
+                _pendingAutoContinue = false;
+                // Find the last user message to give Claude context about what it was doing
+                string lastUserMsg = null;
+                for (int i = _messageHistory.Count - 1; i >= 0; i--)
+                {
+                    if (_messageHistory[i].role == ChatMessage.Role.User)
+                    {
+                        lastUserMsg = _messageHistory[i].text;
+                        break;
+                    }
+                }
+                var continuePrompt = "A domain reload (recompilation) just occurred in Unity, which killed your previous process. "
+                    + "Continue exactly where you left off \u2014 do NOT ask what to work on.";
+                if (!string.IsNullOrEmpty(lastUserMsg))
+                    continuePrompt += $"\n\nThe original request was:\n{lastUserMsg}";
+                _inputField.schedule.Execute(() => SendMessageFromAction(continuePrompt));
+            }
         }
 
         // ── History rebuild ──
@@ -342,6 +391,7 @@ namespace ClaudeCode.Editor
             if (string.IsNullOrEmpty(text)) return;
 
             _inputField.value = "";
+            _pendingInputText = null;
             _usageLabel.style.display = DisplayStyle.None;
 
             // Show the user's typed text in chat (without attachment/agent noise)
@@ -384,8 +434,12 @@ namespace ClaudeCode.Editor
 
         private void ClearAll()
         {
-            if (_wasRunning)
+            if (_reloadLocked)
+            {
+                _reloadLocked = false;
                 AssetDatabase.AllowAutoRefresh();
+                EditorApplication.UnlockReloadAssemblies();
+            }
             _wasRunning = false;
             _outputScroll.Clear();
             _messageHistory.Clear();
@@ -395,6 +449,8 @@ namespace ClaudeCode.Editor
             _usageLabel.text = "";
             _usageLabel.style.display = DisplayStyle.None;
             _attachments.Clear();
+            _savedAttachments.Clear();
+            _pendingInputText = null;
             RebuildAttachmentChips();
             _selectedAgents.Clear();
             _pinnedAgents.Clear();
@@ -547,6 +603,7 @@ namespace ClaudeCode.Editor
 
         private void OnInputChanged(ChangeEvent<string> evt)
         {
+            _pendingInputText = evt.newValue;
             var text = evt.newValue?.Trim();
             if (string.IsNullOrEmpty(text))
             {
@@ -677,11 +734,20 @@ namespace ClaudeCode.Editor
             _cancelButton.style.display = running ? DisplayStyle.Flex : DisplayStyle.None;
             _statusLabel.text = running ? "Claude is thinking\u2026" : "Ready";
 
-            // Prevent domain reload from killing the process mid-task
-            if (running)
+            // Prevent domain reload from killing the process mid-task.
+            // LockReloadAssemblies prevents assembly reload even if a refresh is triggered.
+            if (running && !_reloadLocked)
+            {
+                _reloadLocked = true;
+                EditorApplication.LockReloadAssemblies();
                 AssetDatabase.DisallowAutoRefresh();
-            else
+            }
+            else if (!running && _reloadLocked)
+            {
+                _reloadLocked = false;
                 AssetDatabase.AllowAutoRefresh();
+                EditorApplication.UnlockReloadAssemblies();
+            }
 
             _wasRunning = running;
         }
@@ -761,7 +827,9 @@ namespace ClaudeCode.Editor
                 SetRunning(false);
                 ScrollToBottom();
                 Repaint();
-                AssetDatabase.Refresh();
+                // Defer the asset refresh so the UI has time to finalize and
+                // serialized state is written before a potential domain reload.
+                EditorApplication.delayCall += () => AssetDatabase.Refresh();
             }
 
             // Safety valve: if the OS process exited but Complete never arrived,

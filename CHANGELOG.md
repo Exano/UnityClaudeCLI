@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.2] - 2026-03-10
+
+### Fixed
+- Domain reload now properly locked with LockReloadAssemblies during active requests
+- Fixed orphan Unlock calls after domain reload that broke the reload gate
+- Auto-continue after domain reload includes original request context so Claude resumes work
+- Deferred AssetDatabase.Refresh to prevent immediate reload before UI state is saved
+
+### Improved
+- Thinking display: live list of entries while streaming, collapses to foldout when done
+- Input text and attachments now survive domain reloads
+- Attachment struct marked Serializable for persistence
+
 ## [0.1.0] - 2026-03-06
 
 ### Added

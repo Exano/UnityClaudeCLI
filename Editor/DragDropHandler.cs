@@ -10,6 +10,7 @@ namespace ClaudeCode.Editor
     /// <summary>
     /// Represents a dragged asset/object as a compact reference.
     /// </summary>
+    [Serializable]
     public struct Attachment
     {
         public string DisplayName; // e.g. "PlayerController.cs"

@@ -14,14 +14,16 @@ namespace ClaudeCode.Editor.Rendering
     {
         public event Action<string> SendMessage;
 
-        private readonly Foldout _thinkingFoldout;
+        private readonly VisualElement _thinkingContainer;
         private readonly Foldout _toolsFoldout;
         private readonly VisualElement _contentContainer;
         private readonly VisualElement _actionsContainer;
         private readonly Label _resultLabel;
 
         private Label _streamingLabel;
+        private Label _activeThinkingLabel;
         private readonly StringBuilder _streamingText = new StringBuilder();
+        private readonly List<string> _thinkingEntries = new List<string>();
         private readonly List<string> _toolNames = new List<string>();
         private bool _finalized;
 
@@ -30,11 +32,11 @@ namespace ClaudeCode.Editor.Rendering
             AddToClassList("message-group");
             AddToClassList("claude-message");
 
-            // Thinking (collapsed, hidden until content)
-            _thinkingFoldout = new Foldout { text = "Show thinking", value = false };
-            _thinkingFoldout.AddToClassList("thinking-foldout");
-            _thinkingFoldout.style.display = DisplayStyle.None;
-            Add(_thinkingFoldout);
+            // Thinking list (visible, each entry as a separate item)
+            _thinkingContainer = new VisualElement();
+            _thinkingContainer.AddToClassList("thinking-container");
+            _thinkingContainer.style.display = DisplayStyle.None;
+            Add(_thinkingContainer);
 
             // Tools (collapsed, hidden until content)
             _toolsFoldout = new Foldout { text = "Tools", value = false };
@@ -63,12 +65,50 @@ namespace ClaudeCode.Editor.Rendering
         public void AddThinking(string text)
         {
             if (string.IsNullOrEmpty(text)) return;
-            _thinkingFoldout.style.display = DisplayStyle.Flex;
-            _thinkingFoldout.contentContainer.Clear();
-            var label = new Label(text);
-            label.AddToClassList("thinking-text");
-            label.selection.isSelectable = true;
-            _thinkingFoldout.Add(label);
+            _thinkingContainer.style.display = DisplayStyle.Flex;
+
+            // Remove the previous "active" thinking label — it becomes a finalized entry
+            if (_activeThinkingLabel != null)
+            {
+                _activeThinkingLabel.RemoveFromClassList("thinking-active");
+                _activeThinkingLabel = null;
+            }
+
+            _thinkingEntries.Add(text);
+
+            var item = new Label(text);
+            item.AddToClassList("thinking-item");
+            item.AddToClassList("thinking-active");
+            item.selection.isSelectable = true;
+            _thinkingContainer.Add(item);
+            _activeThinkingLabel = item;
+        }
+
+        /// <summary>
+        /// Called on finalize — collapse old thinking entries into a foldout, keep it tidy.
+        /// </summary>
+        private void CollapseThinking()
+        {
+            if (_thinkingEntries.Count == 0) return;
+
+            _activeThinkingLabel = null;
+            _thinkingContainer.Clear();
+
+            var foldout = new Foldout
+            {
+                text = $"Thinking ({_thinkingEntries.Count} steps)",
+                value = false
+            };
+            foldout.AddToClassList("thinking-foldout");
+
+            foreach (var entry in _thinkingEntries)
+            {
+                var item = new Label(entry);
+                item.AddToClassList("thinking-item");
+                item.selection.isSelectable = true;
+                foldout.Add(item);
+            }
+            _thinkingContainer.Add(foldout);
         }
 
         public void AddToolUse(string toolName)
@@ -118,6 +158,9 @@ namespace ClaudeCode.Editor.Rendering
         {
             if (_finalized) return _streamingText.ToString();
             _finalized = true;
+
+            // Collapse thinking into a foldout now that the turn is done
+            CollapseThinking();
 
             var rawText = _streamingText.ToString();
             if (rawText.Length == 0) return rawText;
