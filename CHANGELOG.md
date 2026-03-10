@@ -1,9 +1,10 @@
 # Changelog
 
-## [0.1.2] - 2026-03-10
+## [0.1.3] - 2026-03-10
 
 ### Fixed
-- Domain reload now properly locked with LockReloadAssemblies during active requests
+- Removed DisallowAutoRefresh — was blocking MCP server refresh calls during active requests
+- Domain reload prevention now uses only LockReloadAssemblies (allows asset imports, blocks C# reload)
 - Fixed orphan Unlock calls after domain reload that broke the reload gate
 - Auto-continue after domain reload includes original request context so Claude resumes work
 - Deferred AssetDatabase.Refresh to prevent immediate reload before UI state is saved

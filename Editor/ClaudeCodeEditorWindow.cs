@@ -149,8 +149,6 @@ namespace ClaudeCode.Editor
             {
                 _wasRunning = false;
                 // Lock state does not survive domain reload — no Unlock needed here.
-                // Just ensure auto-refresh is allowed (safe to call even without prior Disallow).
-                AssetDatabase.AllowAutoRefresh();
                 _continueConversation = true;
                 _pendingAutoContinue = true;
                 _messageHistory.Add(new ChatMessage
@@ -167,7 +165,6 @@ namespace ClaudeCode.Editor
             if (_reloadLocked)
             {
                 _reloadLocked = false;
-                AssetDatabase.AllowAutoRefresh();
                 EditorApplication.UnlockReloadAssemblies();
             }
             // Preserve input text and attachments across domain reload
@@ -437,7 +434,6 @@ namespace ClaudeCode.Editor
             if (_reloadLocked)
             {
                 _reloadLocked = false;
-                AssetDatabase.AllowAutoRefresh();
                 EditorApplication.UnlockReloadAssemblies();
             }
             _wasRunning = false;
@@ -735,17 +731,16 @@ namespace ClaudeCode.Editor
             _statusLabel.text = running ? "Claude is thinking\u2026" : "Ready";
 
             // Prevent domain reload from killing the process mid-task.
-            // LockReloadAssemblies prevents assembly reload even if a refresh is triggered.
+            // LockReloadAssemblies blocks C# recompilation/reload but still allows
+            // asset imports so MCP refresh calls work normally.
             if (running && !_reloadLocked)
             {
                 _reloadLocked = true;
                 EditorApplication.LockReloadAssemblies();
-                AssetDatabase.DisallowAutoRefresh();
             }
             else if (!running && _reloadLocked)
             {
                 _reloadLocked = false;
-                AssetDatabase.AllowAutoRefresh();
                 EditorApplication.UnlockReloadAssemblies();
             }
 
