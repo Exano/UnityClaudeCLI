@@ -326,7 +326,7 @@ namespace ClaudeCode.Editor.Rendering
 
             // Restore inline code with distinct color
             for (int i = 0; i < codeSpans.Count; i++)
-                text = text.Replace($"\x00CODE{i}\x00", $"<color=#fab387>{codeSpans[i]}</color>");
+                text = text.Replace($"\x00CODE{i}\x00", $"<color=#E8A468>{codeSpans[i]}</color>");
 
             return text;
         }

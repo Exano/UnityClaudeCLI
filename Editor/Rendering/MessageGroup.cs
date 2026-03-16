@@ -22,6 +22,8 @@ namespace ClaudeCode.Editor.Rendering
 
         private Label _streamingLabel;
         private Label _activeThinkingLabel;
+        private Label _thinkingIndicator;
+        private IVisualElementScheduledItem _thinkingAnim;
         private readonly StringBuilder _streamingText = new StringBuilder();
         private readonly List<string> _thinkingEntries = new List<string>();
         private readonly List<string> _toolNames = new List<string>();
@@ -49,6 +51,12 @@ namespace ClaudeCode.Editor.Rendering
             _contentContainer.AddToClassList("group-content");
             Add(_contentContainer);
 
+            // Thinking indicator (animated dots, shown until real content arrives)
+            _thinkingIndicator = new Label("Thinking");
+            _thinkingIndicator.AddToClassList("thinking-indicator");
+            _contentContainer.Add(_thinkingIndicator);
+            RegisterCallback<AttachToPanelEvent>(OnAttachedToPanel);
+
             // Action buttons (hidden until detected)
             _actionsContainer = new VisualElement();
             _actionsContainer.AddToClassList("actions-container");
@@ -62,9 +70,37 @@ namespace ClaudeCode.Editor.Rendering
             Add(_resultLabel);
         }
 
+        private void OnAttachedToPanel(AttachToPanelEvent evt)
+        {
+            if (_thinkingIndicator == null) return;
+            int frame = 0;
+            _thinkingAnim = _thinkingIndicator.schedule.Execute(() =>
+            {
+                if (_thinkingIndicator == null) return;
+                frame = (frame + 1) % 4;
+                _thinkingIndicator.text = frame switch
+                {
+                    0 => "Thinking",
+                    1 => "Thinking .",
+                    2 => "Thinking . .",
+                    _ => "Thinking . . ."
+                };
+            }).Every(400);
+        }
+
+        private void HideThinkingIndicator()
+        {
+            if (_thinkingIndicator == null) return;
+            _thinkingAnim?.Pause();
+            _thinkingIndicator.RemoveFromHierarchy();
+            _thinkingIndicator = null;
+            _thinkingAnim = null;
+        }
+
         public void AddThinking(string text)
         {
             if (string.IsNullOrEmpty(text)) return;
+            HideThinkingIndicator();
             _thinkingContainer.style.display = DisplayStyle.Flex;
 
             // Remove the previous "active" thinking label — it becomes a finalized entry
@@ -113,6 +149,7 @@ namespace ClaudeCode.Editor.Rendering
 
         public void AddToolUse(string toolName)
         {
+            HideThinkingIndicator();
             _toolNames.Add(toolName);
             var item = new Label($"\u2022 {toolName}");
             item.AddToClassList("tool-item");
@@ -136,6 +173,7 @@ namespace ClaudeCode.Editor.Rendering
         public void AppendText(string text)
         {
             if (_finalized) return;
+            HideThinkingIndicator();
             if (_streamingLabel == null)
             {
                 _streamingLabel = new Label();
@@ -158,6 +196,8 @@ namespace ClaudeCode.Editor.Rendering
         {
             if (_finalized) return _streamingText.ToString();
             _finalized = true;
+
+            HideThinkingIndicator();
 
             // Collapse thinking into a foldout now that the turn is done
             CollapseThinking();

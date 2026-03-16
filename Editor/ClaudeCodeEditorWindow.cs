@@ -75,11 +75,31 @@ namespace ClaudeCode.Editor
             window.minSize = new Vector2(450, 300);
         }
 
-        /// <summary>16x16 terminal-prompt icon in Catppuccin purple. Cached in static field.</summary>
+        /// <summary>
+        /// Public API for external packages to attach a file and open/focus the window.
+        /// Called via reflection by packages with an optional dependency on this package.
+        /// </summary>
+        public static void AttachFileAndFocus(string path, string displayName, string typeLabel)
+        {
+            var window = GetWindow<ClaudeCodeEditorWindow>();
+            window.titleContent = new GUIContent("Claude Code", GenerateTabIcon());
+            window.minSize = new Vector2(450, 300);
+            window.OnAttachmentAdded(new Attachment
+            {
+                DisplayName = displayName,
+                Path = path,
+                TypeLabel = typeLabel,
+                IsSceneObject = false
+            });
+            window.Show();
+            window.Focus();
+        }
+
+        /// <summary>16x16 terminal-prompt icon in Unity blue. Cached in static field.</summary>
         private static Texture2D GenerateTabIcon()
         {
             if (s_tabIcon != null) return s_tabIcon;
-            // 16x16, each char: . = transparent, # = purple (cba6f7), o = dim (585b70)
+            // 16x16, each char: . = transparent, # = accent blue, o = dim gray
             var rows = new[]
             {
                 "................",
@@ -100,8 +120,8 @@ namespace ClaudeCode.Editor
                 "................",
             };
 
-            var purple = new Color(203/255f, 166/255f, 247/255f, 1f);
-            var dim    = new Color(88/255f, 91/255f, 112/255f, 1f);
+            var purple = new Color(76/255f, 126/255f, 255/255f, 1f);  // Unity blue
+            var dim    = new Color(112/255f, 112/255f, 112/255f, 1f); // Neutral gray
             var clear  = new Color(0, 0, 0, 0);
 
             var tex = new Texture2D(16, 16, TextureFormat.RGBA32, false)
@@ -191,6 +211,9 @@ namespace ClaudeCode.Editor
             title.AddToClassList("toolbar-title");
             toolbar.Add(title);
             toolbar.Add(Spacer());
+            var importBtn = new Button(() => FileImportWindow.Show(OnAttachmentAdded)) { text = "Import" };
+            importBtn.AddToClassList("toolbar-btn");
+            toolbar.Add(importBtn);
             var clearBtn = new Button(ClearAll) { text = "Clear" };
             clearBtn.AddToClassList("toolbar-btn");
             toolbar.Add(clearBtn);
@@ -728,7 +751,7 @@ namespace ClaudeCode.Editor
         {
             _sendButton.style.display = running ? DisplayStyle.None : DisplayStyle.Flex;
             _cancelButton.style.display = running ? DisplayStyle.Flex : DisplayStyle.None;
-            _statusLabel.text = running ? "Claude is thinking\u2026" : "Ready";
+            _statusLabel.text = running ? "Working\u2026" : "Ready";
 
             // Prevent domain reload from killing the process mid-task.
             // LockReloadAssemblies blocks C# recompilation/reload but still allows
