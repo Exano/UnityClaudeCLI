@@ -32,6 +32,8 @@ namespace ClaudeCode.Editor
         [SerializeField] private int _maxTurns = 8;   // 0 = unlimited
         [SerializeField] private string _pendingInputText;               // survives domain reload
         [SerializeField] private List<Attachment> _savedAttachments = new List<Attachment>();
+        [SerializeField] private string _currentConversationId;
+        [SerializeField] private string _conversationCreatedAt;
 
         private static Texture2D s_tabIcon;
         private static readonly string[] k_ModelChoices = { "Sonnet", "Opus" };
@@ -66,6 +68,11 @@ namespace ClaudeCode.Editor
         private float _processExitedAt;
         private bool _pendingAutoContinue;
         private bool _reloadLocked; // tracks whether we hold the lock in THIS AppDomain
+        private VisualElement _historyPanel;
+        private bool _historyPanelVisible;
+        private VisualElement _settingsPanel;
+        private bool _settingsPanelVisible;
+        private TextField _mcpUrlField;
 
         [MenuItem("Window/Claude Code %#k")]
         public static void ShowWindow()
@@ -191,6 +198,7 @@ namespace ClaudeCode.Editor
             if (_inputField != null)
                 _pendingInputText = _inputField.value;
             _savedAttachments = new List<Attachment>(_attachments);
+            SaveCurrentConversation();
             _process?.Dispose();
             _process = null;
         }
@@ -211,13 +219,44 @@ namespace ClaudeCode.Editor
             title.AddToClassList("toolbar-title");
             toolbar.Add(title);
             toolbar.Add(Spacer());
+            var settingsBtn = new Button(ToggleSettingsPanel) { text = "\u2699" };
+            settingsBtn.AddToClassList("toolbar-btn");
+            toolbar.Add(settingsBtn);
+            var historyBtn = new Button(ToggleHistoryPanel) { text = "History \u25be" };
+            historyBtn.AddToClassList("toolbar-btn");
+            toolbar.Add(historyBtn);
+            var newBtn = new Button(NewConversation) { text = "New" };
+            newBtn.AddToClassList("toolbar-btn");
+            toolbar.Add(newBtn);
             var importBtn = new Button(() => FileImportWindow.Show(OnAttachmentAdded)) { text = "Import" };
             importBtn.AddToClassList("toolbar-btn");
             toolbar.Add(importBtn);
-            var clearBtn = new Button(ClearAll) { text = "Clear" };
-            clearBtn.AddToClassList("toolbar-btn");
-            toolbar.Add(clearBtn);
             root.Add(toolbar);
+
+            // Settings panel (hidden by default)
+            _settingsPanel = new VisualElement();
+            _settingsPanel.AddToClassList("settings-panel");
+            _settingsPanel.style.display = DisplayStyle.None;
+            var mcpRow = new VisualElement();
+            mcpRow.AddToClassList("settings-row");
+            var mcpLabel = new Label("MCP Server");
+            mcpLabel.AddToClassList("settings-label");
+            mcpRow.Add(mcpLabel);
+            _mcpUrlField = new TextField();
+            _mcpUrlField.AddToClassList("settings-field");
+            _mcpUrlField.value = ClaudeProcess.GetMcpBaseUrl();
+            mcpRow.Add(_mcpUrlField);
+            var applyBtn = new Button(ApplyMcpUrl) { text = "Apply" };
+            applyBtn.AddToClassList("settings-apply-btn");
+            mcpRow.Add(applyBtn);
+            _settingsPanel.Add(mcpRow);
+            root.Add(_settingsPanel);
+
+            // History panel (hidden by default)
+            _historyPanel = new VisualElement();
+            _historyPanel.AddToClassList("history-panel");
+            _historyPanel.style.display = DisplayStyle.None;
+            root.Add(_historyPanel);
 
             // Output scroll
             _outputScroll = new ScrollView(ScrollViewMode.Vertical);
@@ -410,6 +449,13 @@ namespace ClaudeCode.Editor
             var text = _inputField.value?.Trim();
             if (string.IsNullOrEmpty(text)) return;
 
+            // Create conversation on first message
+            if (string.IsNullOrEmpty(_currentConversationId))
+            {
+                _currentConversationId = Guid.NewGuid().ToString("N");
+                _conversationCreatedAt = DateTime.Now.ToString("o");
+            }
+
             _inputField.value = "";
             _pendingInputText = null;
             _usageLabel.style.display = DisplayStyle.None;
@@ -464,6 +510,8 @@ namespace ClaudeCode.Editor
             _messageHistory.Clear();
             _currentGroup = null;
             _lastSessionId = null;
+            _currentConversationId = null;
+            _conversationCreatedAt = null;
             if (_process != null) _process.LastSessionId = null;
             _usageLabel.text = "";
             _usageLabel.style.display = DisplayStyle.None;
@@ -475,6 +523,171 @@ namespace ClaudeCode.Editor
             _pinnedAgents.Clear();
             _lastAutoDetectInput = null;
             RebuildAgentChips();
+        }
+
+        // ── Conversation history ──
+
+        private void NewConversation()
+        {
+            SaveCurrentConversation();
+            ClearAll();
+        }
+
+        private void SaveCurrentConversation()
+        {
+            if (string.IsNullOrEmpty(_currentConversationId)) return;
+
+            // Only save if there's at least one user message
+            bool hasUser = false;
+            foreach (var msg in _messageHistory)
+                if (msg.role == ChatMessage.Role.User) { hasUser = true; break; }
+            if (!hasUser) return;
+
+            ConversationStore.Save(new ConversationData
+            {
+                id = _currentConversationId,
+                sessionId = _lastSessionId,
+                createdAt = _conversationCreatedAt,
+                messages = new List<ChatMessage>(_messageHistory)
+            });
+        }
+
+        private void LoadConversation(string id)
+        {
+            var data = ConversationStore.Load(id);
+            if (data == null) return;
+
+            SaveCurrentConversation();
+
+            // Clear UI
+            _outputScroll.Clear();
+            _currentGroup = null;
+            _usageLabel.text = "";
+            _usageLabel.style.display = DisplayStyle.None;
+            _attachments.Clear();
+            _savedAttachments.Clear();
+            RebuildAttachmentChips();
+
+            // Load conversation data
+            _currentConversationId = data.id;
+            _conversationCreatedAt = data.createdAt;
+            _lastSessionId = data.sessionId;
+            _messageHistory = new List<ChatMessage>(data.messages);
+            if (_process != null) _process.LastSessionId = data.sessionId;
+            _continueConversation = true;
+            if (_continueToggle != null) _continueToggle.value = true;
+
+            RebuildFromHistory();
+
+            // Close history panel
+            _historyPanelVisible = false;
+            _historyPanel.style.display = DisplayStyle.None;
+            _inputField?.Focus();
+        }
+
+        private void ToggleHistoryPanel()
+        {
+            _historyPanelVisible = !_historyPanelVisible;
+            _historyPanel.style.display = _historyPanelVisible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_historyPanelVisible)
+            {
+                SaveCurrentConversation();
+                RefreshHistoryPanel();
+            }
+        }
+
+        private void RefreshHistoryPanel()
+        {
+            _historyPanel.Clear();
+            var conversations = ConversationStore.ListAll();
+
+            if (conversations.Count == 0)
+            {
+                var empty = new Label("No saved conversations");
+                empty.AddToClassList("history-empty");
+                _historyPanel.Add(empty);
+                return;
+            }
+
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("history-scroll");
+
+            foreach (var conv in conversations)
+            {
+                var convId = conv.id;
+                var item = new VisualElement();
+                item.AddToClassList("history-item");
+                if (convId == _currentConversationId)
+                    item.AddToClassList("history-item--active");
+
+                var textArea = new VisualElement();
+                textArea.AddToClassList("history-item-text");
+                textArea.AddManipulator(new Clickable(() => LoadConversation(convId)));
+
+                var titleLabel = new Label(conv.title ?? "Untitled");
+                titleLabel.AddToClassList("history-item-title");
+                textArea.Add(titleLabel);
+
+                var dateStr = "";
+                if (DateTime.TryParse(conv.updatedAt, out var dt))
+                    dateStr = dt.ToString("MMM d, h:mm tt");
+                var msgCount = conv.messages?.Count ?? 0;
+                var metaLabel = new Label($"{dateStr}  \u00b7  {msgCount} msgs");
+                metaLabel.AddToClassList("history-item-meta");
+                textArea.Add(metaLabel);
+
+                item.Add(textArea);
+
+                var deleteBtn = new Button(() =>
+                {
+                    ConversationStore.Delete(convId);
+                    if (_currentConversationId == convId)
+                    {
+                        _currentConversationId = null;
+                        _conversationCreatedAt = null;
+                    }
+                    RefreshHistoryPanel();
+                }) { text = "\u00d7" };
+                deleteBtn.AddToClassList("history-item-delete");
+                item.Add(deleteBtn);
+
+                scroll.Add(item);
+            }
+
+            _historyPanel.Add(scroll);
+        }
+
+        // ── Settings ──
+
+        private void ToggleSettingsPanel()
+        {
+            _settingsPanelVisible = !_settingsPanelVisible;
+            _settingsPanel.style.display = _settingsPanelVisible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_settingsPanelVisible)
+                _mcpUrlField.SetValueWithoutNotify(ClaudeProcess.GetMcpBaseUrl());
+        }
+
+        private void ApplyMcpUrl()
+        {
+            var url = _mcpUrlField?.value?.Trim();
+            if (string.IsNullOrEmpty(url)) return;
+
+            // Store the base URL (GetMcpUrl will append /mcp)
+            url = url.TrimEnd('/');
+            if (url.EndsWith("/mcp", StringComparison.OrdinalIgnoreCase))
+                url = url.Substring(0, url.Length - 4);
+
+            UnityEditor.EditorPrefs.SetString("ClaudeCode.McpUrl", url);
+            _mcpUrlField.SetValueWithoutNotify(url);
+
+            var fullUrl = ClaudeProcess.GetMcpUrl();
+            var status = _process?.EnsureMcpRegistered(fullUrl);
+            if (!string.IsNullOrEmpty(status))
+            {
+                Record(ChatMessage.Role.System, status);
+                AddSystemBlock(status);
+                ScrollToBottom();
+            }
         }
 
         // ── Block builders ──
@@ -848,6 +1061,7 @@ namespace ClaudeCode.Editor
                 // Defer the asset refresh so the UI has time to finalize and
                 // serialized state is written before a potential domain reload.
                 EditorApplication.delayCall += () => AssetDatabase.Refresh();
+                SaveCurrentConversation();
             }
 
             // Safety valve: if the OS process exited but Complete never arrived,

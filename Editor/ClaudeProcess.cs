@@ -72,20 +72,38 @@ namespace ClaudeCode.Editor
         }
 
         /// <summary>
-        /// Resolves the MCP endpoint URL from the unity-mcp EditorPrefs,
-        /// falling back to the default http://127.0.0.1:8080/mcp.
+        /// Resolves the MCP endpoint URL, checking (in order):
+        /// 1. ClaudeCode.McpUrl (our settings panel)
+        /// 2. MCPForUnity.HttpUrl (unity-mcp package)
+        /// 3. Default http://127.0.0.1:8080
+        /// Always returns a URL ending with /mcp.
         /// </summary>
         public static string GetMcpUrl()
         {
-            const string prefKey = "MCPForUnity.HttpUrl";
-            const string defaultBase = "http://127.0.0.1:8080";
-            var baseUrl = UnityEditor.EditorPrefs.GetString(prefKey, "");
-            if (string.IsNullOrEmpty(baseUrl))
-                baseUrl = defaultBase;
+            var baseUrl = GetMcpBaseUrl();
             baseUrl = baseUrl.TrimEnd('/');
             if (baseUrl.EndsWith("/mcp", StringComparison.OrdinalIgnoreCase))
                 return baseUrl;
             return baseUrl + "/mcp";
+        }
+
+        /// <summary>Returns the MCP base URL (without /mcp suffix).</summary>
+        public static string GetMcpBaseUrl()
+        {
+            const string ownKey = "ClaudeCode.McpUrl";
+            const string legacyKey = "MCPForUnity.HttpUrl";
+            const string defaultBase = "http://127.0.0.1:8080";
+
+            var url = UnityEditor.EditorPrefs.GetString(ownKey, "");
+            if (string.IsNullOrEmpty(url))
+                url = UnityEditor.EditorPrefs.GetString(legacyKey, "");
+            if (string.IsNullOrEmpty(url))
+                url = defaultBase;
+
+            url = url.TrimEnd('/');
+            if (url.EndsWith("/mcp", StringComparison.OrdinalIgnoreCase))
+                url = url.Substring(0, url.Length - 4);
+            return url;
         }
 
         /// <summary>
