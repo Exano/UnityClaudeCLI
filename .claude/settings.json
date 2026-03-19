@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(Assets/**)",
+      "Write(Assets/**)",
+      "Edit(Packages/**)",
+      "Write(Packages/**)",
+      "WebFetch(domain:docs.unity3d.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(claude mcp:*)"
+    ]
+  }
+}

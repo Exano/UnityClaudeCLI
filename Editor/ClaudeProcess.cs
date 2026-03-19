@@ -171,6 +171,8 @@ namespace ClaudeCode.Editor
                 var flags = "--output-format stream-json --verbose";
                 if (skipPermissions)
                     flags += " --dangerously-skip-permissions";
+                else if (File.Exists(PermissionHandler.HookSettingsPath))
+                    flags += $" --settings \"{PermissionHandler.HookSettingsPath}\"";
                 if (!string.IsNullOrEmpty(model))
                     flags += $" --model {model}";
                 if (maxTurns > 0)
