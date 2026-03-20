@@ -1,6 +1,6 @@
 {
   "name": "com.tonythedev.unity-claude-code-cli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "displayName": "Claude Code CLI",
   "description": "Embed Claude Code CLI directly into the Unity Editor as a dockable window. Send prompts, watch Claude work with real-time streaming, and let it create and edit files in your project.",
   "unity": "6000.0",
