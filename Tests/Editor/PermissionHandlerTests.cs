@@ -267,5 +267,74 @@ namespace ClaudeCode.Editor.Tests
             const string json = "{\"tool_input\":{\"file_path\":\"a.cs\",\"command\":\"echo hi\"}}";
             Assert.AreEqual("a.cs", PermissionHandler.BuildDetailString(json));
         }
+
+        // -----------------------------------------------------------
+        //  Permission casing repair
+        // -----------------------------------------------------------
+
+        [Test]
+        public void TitleCaseToolName_LowercaseWords()
+        {
+            Assert.AreEqual("Accept Edits", PermissionHandler.TitleCaseToolName("accept edits"));
+        }
+
+        [Test]
+        public void TitleCaseToolName_AlreadyCorrect()
+        {
+            Assert.AreEqual("Edit(Assets/**)", PermissionHandler.TitleCaseToolName("Edit(Assets/**)"));
+        }
+
+        [Test]
+        public void TitleCaseToolName_LowercaseWithGlob()
+        {
+            Assert.AreEqual("Edit(Assets/**)", PermissionHandler.TitleCaseToolName("edit(Assets/**)"));
+        }
+
+        [Test]
+        public void TitleCaseToolName_SingleWord()
+        {
+            Assert.AreEqual("Bash", PermissionHandler.TitleCaseToolName("bash"));
+        }
+
+        [Test]
+        public void TitleCaseToolName_PreservesRestOfWord()
+        {
+            // Only capitalizes the first letter of each word
+            Assert.AreEqual("WebSearch", PermissionHandler.TitleCaseToolName("webSearch"));
+        }
+
+        [Test]
+        public void FixPermissionArrayCasing_FixesLowercaseAllow()
+        {
+            const string json = "{\n  \"permissions\": {\n    \"allow\": [\n      \"accept edits\",\n      \"bash\"\n    ]\n  }\n}";
+            string result = PermissionHandler.FixPermissionArrayCasing(json, "allow");
+            Assert.IsTrue(result.Contains("\"Accept Edits\""), "Should fix 'accept edits' to 'Accept Edits'");
+            Assert.IsTrue(result.Contains("\"Bash\""), "Should fix 'bash' to 'Bash'");
+        }
+
+        [Test]
+        public void FixPermissionArrayCasing_NoChangeWhenCorrect()
+        {
+            const string json = "{\n  \"permissions\": {\n    \"allow\": [\n      \"Edit(Assets/**)\",\n      \"Write(Assets/**)\"\n    ]\n  }\n}";
+            string result = PermissionHandler.FixPermissionArrayCasing(json, "allow");
+            Assert.AreEqual(json, result, "Should not modify correctly-cased rules");
+        }
+
+        [Test]
+        public void FixPermissionArrayCasing_NoArrayPresent()
+        {
+            const string json = "{\n  \"mcpServers\": {}\n}";
+            string result = PermissionHandler.FixPermissionArrayCasing(json, "allow");
+            Assert.AreEqual(json, result, "Should return unchanged when no allow array exists");
+        }
+
+        [Test]
+        public void FixPermissionArrayCasing_PreservesGlobPaths()
+        {
+            const string json = "{\"permissions\":{\"allow\":[\"edit(assets/Scripts/**)\"]}}";
+            string result = PermissionHandler.FixPermissionArrayCasing(json, "allow");
+            // Tool name gets fixed, path inside parens stays as-is
+            Assert.IsTrue(result.Contains("\"Edit(assets/Scripts/**)\""));
+        }
     }
 }

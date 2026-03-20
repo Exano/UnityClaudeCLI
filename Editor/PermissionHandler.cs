@@ -1,9 +1,12 @@
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
+
+[assembly: InternalsVisibleTo("ClaudeCode.Editor.Tests")]
 
 namespace ClaudeCode.Editor
 {
@@ -47,6 +50,7 @@ namespace ClaudeCode.Editor
 
             EnsureSetup();
             EnsureProjectRootSettings();
+            FixSettingsPermissionCasing();
             // Don't clean up recent requests — a hook script may still be waiting.
             // Only remove truly abandoned files (older than the hook timeout + margin).
             CleanupStaleRequests();
@@ -126,6 +130,96 @@ namespace ClaudeCode.Editor
             {
                 Debug.LogWarning($"[ClaudeCode] Could not create project root settings: {e.Message}");
             }
+        }
+
+        // ------------------------------------------------------------------
+        //  Settings permission casing repair
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Scans .claude/settings.json and .claude/settings.local.json for
+        /// improperly-cased permission rules (e.g., "accept edits" instead of
+        /// "Accept Edits"). Claude CLI requires tool names to start with
+        /// uppercase and rejects the ENTIRE file on any violation — which also
+        /// knocks out valid MCP server config in the same file.
+        /// </summary>
+        private static void FixSettingsPermissionCasing()
+        {
+            string claudeDir = Path.Combine(s_ProjectRoot, ".claude");
+            FixPermissionCasingInFile(Path.Combine(claudeDir, "settings.json"));
+            FixPermissionCasingInFile(Path.Combine(claudeDir, "settings.local.json"));
+        }
+
+        private static void FixPermissionCasingInFile(string path)
+        {
+            if (!File.Exists(path)) return;
+            try
+            {
+                string content = File.ReadAllText(path);
+                string fixedContent = FixPermissionArrayCasing(content, "allow");
+                fixedContent = FixPermissionArrayCasing(fixedContent, "deny");
+
+                if (fixedContent != content)
+                {
+                    File.WriteAllText(path, fixedContent, Encoding.UTF8);
+                    Debug.Log($"[ClaudeCode] Fixed permission rule casing in {Path.GetFileName(path)} " +
+                        "(Claude CLI requires tool names to start with uppercase).");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ClaudeCode] Could not validate {Path.GetFileName(path)}: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Finds a "key": ["rule1", "rule2"] array in JSON and title-cases
+        /// the tool-name portion of each rule (the part before any parenthesis).
+        /// </summary>
+        internal static string FixPermissionArrayCasing(string json, string key)
+        {
+            var pattern = $"\"{Regex.Escape(key)}\"\\s*:\\s*\\[([^\\]]*)\\]";
+            var match = Regex.Match(json, pattern, RegexOptions.Singleline);
+            if (!match.Success) return json;
+
+            string arrayContent = match.Groups[1].Value;
+            string fixedArray = Regex.Replace(arrayContent, "\"([^\"]+)\"", ruleMatch =>
+            {
+                string rule = ruleMatch.Groups[1].Value;
+                return $"\"{TitleCaseToolName(rule)}\"";
+            });
+
+            if (fixedArray == arrayContent) return json;
+
+            return json.Substring(0, match.Groups[1].Index)
+                + fixedArray
+                + json.Substring(match.Groups[1].Index + match.Groups[1].Length);
+        }
+
+        /// <summary>
+        /// Title-cases the tool name portion of a permission rule.
+        /// "accept edits" → "Accept Edits",
+        /// "edit(Assets/**)" → "Edit(Assets/**)",
+        /// "Write(Assets/**)" → unchanged.
+        /// </summary>
+        internal static string TitleCaseToolName(string rule)
+        {
+            int parenIdx = rule.IndexOf('(');
+            string toolPart = parenIdx >= 0 ? rule.Substring(0, parenIdx) : rule;
+            string rest = parenIdx >= 0 ? rule.Substring(parenIdx) : "";
+
+            var words = toolPart.Split(' ');
+            bool changed = false;
+            for (int i = 0; i < words.Length; i++)
+            {
+                if (words[i].Length > 0 && char.IsLower(words[i][0]))
+                {
+                    words[i] = char.ToUpper(words[i][0]) + words[i].Substring(1);
+                    changed = true;
+                }
+            }
+
+            return changed ? string.Join(" ", words) + rest : rule;
         }
 
         // ------------------------------------------------------------------
