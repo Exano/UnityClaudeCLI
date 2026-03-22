@@ -24,7 +24,8 @@ namespace ClaudeCode.Editor
 
         // Serialized state survives domain reload
         [SerializeField] private List<ChatMessage> _messageHistory = new List<ChatMessage>();
-        [SerializeField] private bool _autoApprove = true;
+        [SerializeField] private PermissionMode _permissionMode = PermissionMode.AutoApprove;
+        [SerializeField] private bool _lastRunWasPlanMode;
         [SerializeField] private bool _continueConversation = true;
         [SerializeField] private string _lastSessionId;
         [SerializeField] private bool _wasRunning;
@@ -46,7 +47,7 @@ namespace ClaudeCode.Editor
         private Button _cancelButton;
         private Label _statusLabel;
         private Label _usageLabel;
-        private Toggle _autoApproveToggle;
+        private PopupField<string> _permissionModeDropdown;
         private Toggle _continueToggle;
         private PopupField<string> _modelDropdown;
         private SliderInt _maxTurnsSlider;
@@ -296,11 +297,12 @@ namespace ClaudeCode.Editor
             _continueToggle.value = _continueConversation;
             _continueToggle.RegisterValueChangedCallback(e => _continueConversation = e.newValue);
             optionsRow.Add(_continueToggle);
-            _autoApproveToggle = new Toggle("Auto-approve");
-            _autoApproveToggle.AddToClassList("option-toggle");
-            _autoApproveToggle.value = _autoApprove;
-            _autoApproveToggle.RegisterValueChangedCallback(e => _autoApprove = e.newValue);
-            optionsRow.Add(_autoApproveToggle);
+            var permChoices = new List<string> { "Default", "Auto-approve", "Plan" };
+            _permissionModeDropdown = new PopupField<string>(permChoices, (int)_permissionMode);
+            _permissionModeDropdown.AddToClassList("model-dropdown");
+            _permissionModeDropdown.RegisterValueChangedCallback(e =>
+                _permissionMode = (PermissionMode)permChoices.IndexOf(e.newValue));
+            optionsRow.Add(_permissionModeDropdown);
 
             // Model selector
             _modelDropdown = new PopupField<string>(
@@ -476,8 +478,9 @@ namespace ClaudeCode.Editor
 
             Record(ChatMessage.Role.User, displayText);
             AddUserBlock(displayText);
+            _lastRunWasPlanMode = _permissionMode == PermissionMode.Plan;
             BeginStreamingResponse();
-            _process.SendMessage(prompt, _continueConversation, _autoApprove,
+            _process.SendMessage(prompt, _continueConversation, _permissionMode,
                 k_ModelIds[_modelIndex], _maxTurns);
             SetRunning(true);
             _inputField.Focus();
@@ -493,7 +496,8 @@ namespace ClaudeCode.Editor
             Record(ChatMessage.Role.User, text);
             AddUserBlock(text);
             BeginStreamingResponse();
-            _process.SendMessage(prompt, true, _autoApprove,
+            _lastRunWasPlanMode = _permissionMode == PermissionMode.Plan;
+            _process.SendMessage(prompt, true, _permissionMode,
                 k_ModelIds[_modelIndex], _maxTurns); // always continue for action buttons
             SetRunning(true);
         }
@@ -730,7 +734,7 @@ namespace ClaudeCode.Editor
 
         private void BeginStreamingResponse()
         {
-            _currentGroup = new MessageGroup();
+            _currentGroup = new MessageGroup(_lastRunWasPlanMode);
             _currentGroup.SendMessage += SendMessageFromAction;
             _outputScroll.Add(_currentGroup);
         }
@@ -964,7 +968,10 @@ namespace ClaudeCode.Editor
         {
             _sendButton.style.display = running ? DisplayStyle.None : DisplayStyle.Flex;
             _cancelButton.style.display = running ? DisplayStyle.Flex : DisplayStyle.None;
-            _statusLabel.text = running ? "Working\u2026" : "Ready";
+            _statusLabel.text = running
+                ? (_lastRunWasPlanMode ? "Planning\u2026" : "Working\u2026")
+                : "Ready";
+            _permissionModeDropdown?.SetEnabled(!running);
 
             // Prevent domain reload from killing the process mid-task.
             // LockReloadAssemblies blocks C# recompilation/reload but still allows

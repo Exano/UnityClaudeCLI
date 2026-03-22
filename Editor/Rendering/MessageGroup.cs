@@ -27,12 +27,16 @@ namespace ClaudeCode.Editor.Rendering
         private readonly StringBuilder _streamingText = new StringBuilder();
         private readonly List<string> _thinkingEntries = new List<string>();
         private readonly List<string> _toolNames = new List<string>();
+        private readonly string _thinkingPrefix;
         private bool _finalized;
 
-        public MessageGroup()
+        public MessageGroup(bool isPlanMode = false)
         {
+            _thinkingPrefix = isPlanMode ? "Planning" : "Thinking";
             AddToClassList("message-group");
             AddToClassList("claude-message");
+            if (isPlanMode)
+                AddToClassList("message-group--plan");
 
             // Thinking list (visible, each entry as a separate item)
             _thinkingContainer = new VisualElement();
@@ -52,7 +56,7 @@ namespace ClaudeCode.Editor.Rendering
             Add(_contentContainer);
 
             // Thinking indicator (animated dots, shown until real content arrives)
-            _thinkingIndicator = new Label("Thinking");
+            _thinkingIndicator = new Label(_thinkingPrefix);
             _thinkingIndicator.AddToClassList("thinking-indicator");
             _contentContainer.Add(_thinkingIndicator);
             RegisterCallback<AttachToPanelEvent>(OnAttachedToPanel);
@@ -80,10 +84,10 @@ namespace ClaudeCode.Editor.Rendering
                 frame = (frame + 1) % 4;
                 _thinkingIndicator.text = frame switch
                 {
-                    0 => "Thinking",
-                    1 => "Thinking .",
-                    2 => "Thinking . .",
-                    _ => "Thinking . . ."
+                    0 => _thinkingPrefix,
+                    1 => $"{_thinkingPrefix} .",
+                    2 => $"{_thinkingPrefix} . .",
+                    _ => $"{_thinkingPrefix} . . ."
                 };
             }).Every(400);
         }

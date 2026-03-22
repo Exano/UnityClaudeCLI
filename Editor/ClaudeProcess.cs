@@ -9,6 +9,8 @@ using UnityEngine;
 
 namespace ClaudeCode.Editor
 {
+    public enum PermissionMode { Default, AutoApprove, Plan }
+
     public class ClaudeProcess : IDisposable
     {
         public enum ProcessState { Idle, Running, Error }
@@ -154,7 +156,35 @@ namespace ClaudeCode.Editor
             }
         }
 
-        public void SendMessage(string prompt, bool resume = false, bool skipPermissions = true,
+        internal static string BuildFlags(PermissionMode permissionMode, string model,
+            int maxTurns, bool resume, string sessionId, string hookSettingsPath)
+        {
+            var flags = "--output-format stream-json --verbose";
+            switch (permissionMode)
+            {
+                case PermissionMode.AutoApprove:
+                    flags += " --dangerously-skip-permissions";
+                    break;
+                case PermissionMode.Plan:
+                    flags += " --permission-mode plan";
+                    break;
+                case PermissionMode.Default:
+                    if (!string.IsNullOrEmpty(hookSettingsPath) && File.Exists(hookSettingsPath))
+                        flags += $" --settings \"{hookSettingsPath}\"";
+                    break;
+            }
+            if (!string.IsNullOrEmpty(model))
+                flags += $" --model {model}";
+            if (maxTurns > 0)
+                flags += $" --max-turns {maxTurns}";
+            if (resume && !string.IsNullOrEmpty(sessionId)
+                && Guid.TryParse(sessionId, out _))
+                flags += $" --continue {sessionId}";
+            return flags;
+        }
+
+        public void SendMessage(string prompt, bool resume = false,
+            PermissionMode permissionMode = PermissionMode.AutoApprove,
             string model = null, int maxTurns = 0)
         {
             if (CurrentState == ProcessState.Running)
@@ -168,18 +198,8 @@ namespace ClaudeCode.Editor
 
             try
             {
-                var flags = "--output-format stream-json --verbose";
-                if (skipPermissions)
-                    flags += " --dangerously-skip-permissions";
-                else if (File.Exists(PermissionHandler.HookSettingsPath))
-                    flags += $" --settings \"{PermissionHandler.HookSettingsPath}\"";
-                if (!string.IsNullOrEmpty(model))
-                    flags += $" --model {model}";
-                if (maxTurns > 0)
-                    flags += $" --max-turns {maxTurns}";
-                if (resume && !string.IsNullOrEmpty(LastSessionId)
-                    && Guid.TryParse(LastSessionId, out _))
-                    flags += $" --continue {LastSessionId}";
+                var flags = BuildFlags(permissionMode, model, maxTurns, resume,
+                    LastSessionId, PermissionHandler.HookSettingsPath);
 
                 // Always use cmd.exe/bash with stdin pipe — claude -p is non-interactive
                 var psi = CreateShellProcessInfo($"claude -p {flags}");

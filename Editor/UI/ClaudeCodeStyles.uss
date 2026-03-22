@@ -53,6 +53,13 @@
 /* Claude message (history replay) */
 .claude-message { padding-left: 8px; border-left-width: 2px; border-left-color: #4C7EFF; margin-bottom: 10px; }
 
+/* ── Plan mode (read-only) ── */
+.message-group--plan { border-left-color: #A78BFA; }
+.message-group--plan .thinking-indicator { color: #A78BFA; }
+.message-group--plan .thinking-active { border-left-color: #A78BFA; }
+.message-group--plan .thinking-foldout > .unity-foldout__toggle > .unity-foldout__text { color: #A78BFA; }
+.message-group--plan .group-result { color: #A78BFA; }
+
 /* ── Thinking indicator (animated) ── */
 .thinking-indicator { color: #F0A030; font-size: 12px; -unity-font-style: italic; padding: 4px 0; margin-bottom: 4px; }
 
