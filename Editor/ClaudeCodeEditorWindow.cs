@@ -30,7 +30,7 @@ namespace ClaudeCode.Editor
         [SerializeField] private string _lastSessionId;
         [SerializeField] private bool _wasRunning;
         [SerializeField] private int _modelIndex;     // 0 = Sonnet, 1 = Opus
-        [SerializeField] private int _maxTurns = 8;   // 0 = unlimited
+        [SerializeField] private int _maxTurns;        // 0 = unlimited
         [SerializeField] private string _pendingInputText;               // survives domain reload
         [SerializeField] private List<Attachment> _savedAttachments = new List<Attachment>();
         [SerializeField] private string _currentConversationId;
@@ -52,6 +52,8 @@ namespace ClaudeCode.Editor
         private PopupField<string> _modelDropdown;
         private SliderInt _maxTurnsSlider;
         private Label _maxTurnsLabel;
+        private Label _activityIndicator;
+        private IVisualElementScheduledItem _activityAnim;
 
         // Attachments
         private List<Attachment> _attachments = new List<Attachment>();
@@ -267,6 +269,12 @@ namespace ClaudeCode.Editor
             // Input area
             var inputContainer = new VisualElement();
             inputContainer.AddToClassList("input-container");
+
+            // Activity indicator (animated, hidden until running)
+            _activityIndicator = new Label();
+            _activityIndicator.AddToClassList("activity-indicator");
+            _activityIndicator.style.display = DisplayStyle.None;
+            inputContainer.Add(_activityIndicator);
 
             var inputRow = new VisualElement();
             inputRow.AddToClassList("input-row");
@@ -972,6 +980,33 @@ namespace ClaudeCode.Editor
                 ? (_lastRunWasPlanMode ? "Planning\u2026" : "Working\u2026")
                 : "Ready";
             _permissionModeDropdown?.SetEnabled(!running);
+
+            // Animated activity indicator above the input field
+            if (running && _activityIndicator != null)
+            {
+                var prefix = _lastRunWasPlanMode ? "Planning" : "Thinking";
+                _activityIndicator.text = prefix;
+                _activityIndicator.style.display = DisplayStyle.Flex;
+                _activityIndicator.EnableInClassList("activity-indicator--plan", _lastRunWasPlanMode);
+                int frame = 0;
+                _activityAnim = _activityIndicator.schedule.Execute(() =>
+                {
+                    frame = (frame + 1) % 4;
+                    _activityIndicator.text = frame switch
+                    {
+                        0 => prefix,
+                        1 => $"{prefix} .",
+                        2 => $"{prefix} . .",
+                        _ => $"{prefix} . . ."
+                    };
+                }).Every(400);
+            }
+            else if (!running && _activityIndicator != null)
+            {
+                _activityAnim?.Pause();
+                _activityAnim = null;
+                _activityIndicator.style.display = DisplayStyle.None;
+            }
 
             // Prevent domain reload from killing the process mid-task.
             // LockReloadAssemblies blocks C# recompilation/reload but still allows

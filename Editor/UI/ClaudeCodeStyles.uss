@@ -149,6 +149,10 @@
    Input area
    ═══════════════════════════════════════════ */
 
+/* ── Activity indicator (above input field) ── */
+.activity-indicator { color: #F0A030; font-size: 11px; -unity-font-style: italic; padding: 4px 2px 6px 2px; -unity-text-align: middle-center; }
+.activity-indicator--plan { color: #A78BFA; }
+
 .input-container { background-color: #363636; padding: 8px 10px; border-top-width: 1px; border-top-color: #202020; flex-shrink: 0; }
 .input-row { flex-direction: row; align-items: flex-end; }
 .input-field { flex-grow: 1; flex-shrink: 1; margin-right: 6px; overflow: hidden; }
