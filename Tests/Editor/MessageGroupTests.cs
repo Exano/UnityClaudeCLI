@@ -136,6 +136,30 @@ namespace ClaudeCode.Editor.Tests
             Assert.AreEqual(MessageGroup.ActionKind.WaitingForInput, result.Kind);
         }
 
+        [Test]
+        public void ClassifyActions_WaitingForInput_GenericQuestionMark()
+        {
+            // Any response ending with ? should trigger WaitingForInput
+            var result = MessageGroup.ClassifyActions("Which color do you want to pick?");
+            Assert.AreEqual(MessageGroup.ActionKind.WaitingForInput, result.Kind);
+        }
+
+        [Test]
+        public void ClassifyActions_WaitingForInput_QuestionOnSecondToLastLine()
+        {
+            // Question on second-to-last line, follow-up on last
+            var result = MessageGroup.ClassifyActions(
+                "Which color do you want to pick?\nWaiting on your pick!");
+            Assert.AreEqual(MessageGroup.ActionKind.WaitingForInput, result.Kind);
+        }
+
+        [Test]
+        public void ClassifyActions_WaitingForInput_Waiting()
+        {
+            var result = MessageGroup.ClassifyActions("Waiting on your pick!");
+            Assert.AreEqual(MessageGroup.ActionKind.WaitingForInput, result.Kind);
+        }
+
         // ── ClassifyActions: No match ──
 
         [Test]

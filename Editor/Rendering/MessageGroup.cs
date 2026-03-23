@@ -273,10 +273,22 @@ namespace ClaudeCode.Editor.Rendering
             }
 
             // Waiting for input (Claude paused to ask questions or get feedback)
-            if (lastLine.Contains("questions") || lastLine.Contains("what do you think") ||
-                lastLine.Contains("your thoughts") || lastLine.Contains("your preference") ||
-                lastLine.Contains("let me know") || lastLine.Contains("please clarify") ||
-                lastLine.Contains("which option") || lastLine.Contains("which approach"))
+            // Check last two lines — the question may be on the second-to-last line
+            bool hasQuestion = false;
+            for (int i = lines.Length - 1; i >= 0 && i >= lines.Length - 2; i--)
+            {
+                var line = lines[i].Trim().ToLowerInvariant();
+                if (line.EndsWith("?") || line.Contains("questions") ||
+                    line.Contains("what do you think") || line.Contains("your thoughts") ||
+                    line.Contains("your preference") || line.Contains("let me know") ||
+                    line.Contains("please clarify") || line.Contains("which option") ||
+                    line.Contains("which approach") || line.Contains("waiting"))
+                {
+                    hasQuestion = true;
+                    break;
+                }
+            }
+            if (hasQuestion)
             {
                 result.Kind = ActionKind.WaitingForInput;
                 return result;
