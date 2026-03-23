@@ -314,7 +314,11 @@ namespace ClaudeCode.Editor.Rendering
             {
                 case ActionKind.NumberedOptions:
                     foreach (var item in detected.Items)
-                        AddAction(item, item);
+                    {
+                        // Strip markdown bold markers from button labels
+                        var clean = item.Replace("**", "");
+                        AddAction(clean, clean);
+                    }
                     break;
                 case ActionKind.YesNo:
                     AddAction("Yes, go ahead", "Yes, go ahead.");
