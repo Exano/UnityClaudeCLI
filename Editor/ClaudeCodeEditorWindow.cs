@@ -500,6 +500,24 @@ namespace ClaudeCode.Editor
         {
             if (_process == null || _process.CurrentState == ClaudeProcess.ProcessState.Running) return;
             _usageLabel.style.display = DisplayStyle.None;
+
+            // Auto-switch from Plan to Auto-approve when the user approves a plan
+            if (_permissionMode == PermissionMode.Plan)
+            {
+                var lower = text.ToLowerInvariant();
+                if (lower.Contains("approve") || lower.Contains("go ahead") ||
+                    lower.Contains("proceed") || lower.Contains("implement") ||
+                    lower.Contains("begin") || lower.Contains("start") ||
+                    lower.Contains("yes"))
+                {
+                    _permissionMode = PermissionMode.AutoApprove;
+                    if (_permissionModeDropdown != null)
+                        _permissionModeDropdown.value = "Auto-approve";
+                    Record(ChatMessage.Role.System, "[Switched to Auto-approve for implementation]");
+                    AddSystemBlock("[Switched to Auto-approve for implementation]");
+                }
+            }
+
             var prompt = BuildPromptWithAgentContext(text);
             Record(ChatMessage.Role.User, text);
             AddUserBlock(text);
