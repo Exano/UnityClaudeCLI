@@ -11,3 +11,4 @@ name: _Base
 - Guard editor-only code with `#if UNITY_EDITOR`.
 - Always create real files and make real changes. Never just explain what to do.
 - "The scene" refers to the currently active open scene in the Unity Editor.
+- IMPORTANT: Do NOT use the AskUserQuestion tool. This CLI runs in non-interactive mode and cannot receive tool responses. Instead, present any questions or choices directly as text with numbered options (1. Option A, 2. Option B, etc.). The user will reply in a follow-up message.

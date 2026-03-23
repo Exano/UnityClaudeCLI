@@ -416,15 +416,19 @@ namespace ClaudeCode.Editor
                     info.Append($"{msg.num_turns} turn{(msg.num_turns != 1 ? "s" : "")}");
                 }
                 if (info.Length > 0) Enqueue(OutputChunk.Kind.Result, info.ToString());
-                if (msg.is_error)
+                // Surface the result text — on non-error exits it may contain
+                // the final response (e.g. unanswered questions from AskUserQuestion).
+                if (!string.IsNullOrEmpty(msg.result))
                 {
-                    if (!string.IsNullOrEmpty(msg.result))
+                    if (msg.is_error)
                         Enqueue(OutputChunk.Kind.System, $"[Error] {msg.result}");
-                    if (msg.errors != null)
-                        foreach (var err in msg.errors)
-                            if (!string.IsNullOrEmpty(err))
-                                Enqueue(OutputChunk.Kind.System, $"[Error] {err}");
+                    else
+                        Enqueue(OutputChunk.Kind.Text, msg.result);
                 }
+                if (msg.is_error && msg.errors != null)
+                    foreach (var err in msg.errors)
+                        if (!string.IsNullOrEmpty(err))
+                            Enqueue(OutputChunk.Kind.System, $"[Error] {err}");
             }
             catch { }
         }
