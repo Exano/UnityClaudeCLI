@@ -354,7 +354,17 @@ namespace ClaudeCode.Editor
                     if (block.type == "text" && !string.IsNullOrEmpty(block.text))
                         text.Append(block.text);
                     else if (block.type == "tool_use" && !string.IsNullOrEmpty(block.name))
+                    {
                         Enqueue(OutputChunk.Kind.ToolUse, block.name);
+                        // AskUserQuestion embeds the question in the tool input —
+                        // extract it so the user can actually see and respond to it.
+                        if (block.name == "AskUserQuestion")
+                        {
+                            var q = ExtractToolInputQuestion(json);
+                            if (!string.IsNullOrEmpty(q))
+                                text.Append(q);
+                        }
+                    }
                     else if (block.type == "thinking" && !string.IsNullOrEmpty(block.thinking))
                         Enqueue(OutputChunk.Kind.Thinking, block.thinking);
                 }
@@ -362,6 +372,19 @@ namespace ClaudeCode.Editor
                     Enqueue(OutputChunk.Kind.Text, text.ToString());
             }
             catch { }
+        }
+
+        internal static string ExtractToolInputQuestion(string json)
+        {
+            // The question lives in: "input":{"question":"..."} inside a tool_use block.
+            var match = System.Text.RegularExpressions.Regex.Match(json,
+                "\"question\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+            if (!match.Success) return null;
+            return match.Groups[1].Value
+                .Replace("\\n", "\n")
+                .Replace("\\t", "\t")
+                .Replace("\\\"", "\"")
+                .Replace("\\\\", "\\");
         }
 
         private void HandleResultEvent(string json)

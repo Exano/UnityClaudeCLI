@@ -77,5 +77,48 @@ namespace ClaudeCode.Editor.Tests
             var flags = ClaudeProcess.BuildFlags(PermissionMode.Plan, null, 0, false, null, null);
             Assert.IsTrue(flags.Contains("--output-format stream-json"));
         }
+        // ── ExtractToolInputQuestion ──
+
+        [Test]
+        public void ExtractToolInputQuestion_BasicQuestion()
+        {
+            const string json = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"AskUserQuestion\",\"input\":{\"question\":\"Which color do you prefer?\"}}]}}";
+            Assert.AreEqual("Which color do you prefer?",
+                ClaudeProcess.ExtractToolInputQuestion(json));
+        }
+
+        [Test]
+        public void ExtractToolInputQuestion_WithNewlines()
+        {
+            const string json = "{\"input\":{\"question\":\"Pick one:\\n1. Red\\n2. Blue\\n3. Green\"}}";
+            var result = ClaudeProcess.ExtractToolInputQuestion(json);
+            Assert.IsTrue(result.Contains("1. Red"));
+            Assert.IsTrue(result.Contains("\n"));
+        }
+
+        [Test]
+        public void ExtractToolInputQuestion_WithEscapedQuotes()
+        {
+            const string json = "{\"input\":{\"question\":\"Do you want the \\\"dark\\\" theme?\"}}";
+            Assert.AreEqual("Do you want the \"dark\" theme?",
+                ClaudeProcess.ExtractToolInputQuestion(json));
+        }
+
+        [Test]
+        public void ExtractToolInputQuestion_NoQuestionField_ReturnsNull()
+        {
+            const string json = "{\"input\":{\"prompt\":\"Hello\"}}";
+            Assert.IsNull(ClaudeProcess.ExtractToolInputQuestion(json));
+        }
+
+        [Test]
+        public void ExtractToolInputQuestion_NumberedOptions_Preserved()
+        {
+            const string json = "{\"input\":{\"question\":\"Which approach?\\n1. Option A\\n2. Option B\\n3. Option C\"}}";
+            var result = ClaudeProcess.ExtractToolInputQuestion(json);
+            Assert.IsTrue(result.Contains("1. Option A"));
+            Assert.IsTrue(result.Contains("2. Option B"));
+            Assert.IsTrue(result.Contains("3. Option C"));
+        }
     }
 }
