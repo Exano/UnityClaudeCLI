@@ -186,5 +186,25 @@ namespace ClaudeCode.Editor.Tests
                 "I have some questions.\n1. Option A\n2. Option B");
             Assert.AreEqual(MessageGroup.ActionKind.NumberedOptions, result.Kind);
         }
+
+        [Test]
+        public void ClassifyActions_NumberedOptions_FollowedByQuestion()
+        {
+            // Numbered list followed by "Which one?" — should detect the options, not WaitingForInput
+            var result = MessageGroup.ClassifyActions(
+                "Pick a color:\n1. Red\n2. Blue\n3. Green\n4. Purple\n\nWhich one?");
+            Assert.AreEqual(MessageGroup.ActionKind.NumberedOptions, result.Kind);
+            Assert.AreEqual(4, result.Items.Count);
+            Assert.AreEqual("Red", result.Items[0]);
+        }
+
+        [Test]
+        public void ClassifyActions_NumberedOptions_FollowedByTwoTrailingLines()
+        {
+            var result = MessageGroup.ClassifyActions(
+                "Options:\n1. A\n2. B\n3. C\nLet me know.\nThanks!");
+            Assert.AreEqual(MessageGroup.ActionKind.NumberedOptions, result.Kind);
+            Assert.AreEqual(3, result.Items.Count);
+        }
     }
 }

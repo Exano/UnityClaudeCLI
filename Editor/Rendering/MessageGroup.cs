@@ -242,9 +242,19 @@ namespace ClaudeCode.Editor.Rendering
             var lines = text.TrimEnd().Split('\n');
             if (lines.Length == 0) return result;
 
-            // Check for numbered options at the end
+            // Check for numbered options near the end — skip up to 3 trailing
+            // non-numbered lines (e.g. "Which one?", blank lines) to find the list.
+            int scanStart = lines.Length - 1;
+            int skipped = 0;
+            while (scanStart >= 0 && skipped < 3)
+            {
+                if (Regex.IsMatch(lines[scanStart].Trim(), @"^\d+\.\s+"))
+                    break;
+                scanStart--;
+                skipped++;
+            }
             var numberedItems = new List<string>();
-            for (int i = lines.Length - 1; i >= 0; i--)
+            for (int i = scanStart; i >= 0; i--)
             {
                 var m = Regex.Match(lines[i].Trim(), @"^\d+\.\s+(.+)");
                 if (m.Success)
@@ -312,7 +322,6 @@ namespace ClaudeCode.Editor.Rendering
                     break;
                 case ActionKind.WaitingForInput:
                     AddAction("Continue", "Continue, please proceed.");
-                    AddAction("I have input", "Here's my input:");
                     break;
             }
         }
