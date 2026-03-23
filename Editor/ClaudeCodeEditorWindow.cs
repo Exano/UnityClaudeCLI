@@ -555,6 +555,33 @@ namespace ClaudeCode.Editor
             RebuildAgentChips();
         }
 
+        // ── Plan file ──
+
+        private static readonly string k_PlanDir = Path.Combine(".claude", "plans");
+        private static readonly string k_PlanFile = "current-plan.md";
+
+        private void SavePlanFile(string planText)
+        {
+            try
+            {
+                var projectRoot = Path.GetDirectoryName(Application.dataPath);
+                var dir = Path.Combine(projectRoot, k_PlanDir);
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                var path = Path.Combine(dir, k_PlanFile);
+                File.WriteAllText(path, planText);
+                var msg = $"[Plan saved to {k_PlanDir}/{k_PlanFile}]";
+                Record(ChatMessage.Role.System, msg);
+                AddSystemBlock(msg);
+            }
+            catch (Exception e)
+            {
+                var msg = $"[Failed to save plan: {e.Message}]";
+                Record(ChatMessage.Role.System, msg);
+                AddSystemBlock(msg);
+            }
+        }
+
         // ── Conversation history ──
 
         private void NewConversation()
@@ -1106,15 +1133,31 @@ namespace ClaudeCode.Editor
             if (done)
             {
                 _processExitedAt = 0;
+                string fullText = null;
                 if (_currentGroup != null)
                 {
-                    var fullText = _currentGroup.Finalize();
+                    fullText = _currentGroup.Finalize();
                     if (!string.IsNullOrEmpty(fullText))
                         Record(ChatMessage.Role.Claude, fullText);
                 }
+
+                // Auto-save plan to a file Claude can read back during implementation
+                if (_lastRunWasPlanMode && !string.IsNullOrEmpty(fullText))
+                    SavePlanFile(fullText);
+
                 _currentGroup = null;
                 if (!string.IsNullOrEmpty(_process?.LastSessionId))
                     _lastSessionId = _process.LastSessionId;
+
+                // Ensure continue is on after a plan response so the next
+                // message (approval or follow-up) carries the session context
+                if (_lastRunWasPlanMode)
+                {
+                    _continueConversation = true;
+                    if (_continueToggle != null)
+                        _continueToggle.value = true;
+                }
+
                 SetRunning(false);
                 ScrollToBottom();
                 Repaint();
