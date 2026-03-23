@@ -228,10 +228,19 @@ namespace ClaudeCode.Editor.Rendering
 
         // ── Action button detection ──
 
-        private void DetectActions(string text)
+        internal enum ActionKind { None, NumberedOptions, YesNo, WaitingForInput }
+
+        internal struct DetectedActions
         {
+            public ActionKind Kind;
+            public List<string> Items; // populated for NumberedOptions
+        }
+
+        internal static DetectedActions ClassifyActions(string text)
+        {
+            var result = new DetectedActions { Kind = ActionKind.None };
             var lines = text.TrimEnd().Split('\n');
-            if (lines.Length == 0) return;
+            if (lines.Length == 0) return result;
 
             // Check for numbered options at the end
             var numberedItems = new List<string>();
@@ -245,20 +254,54 @@ namespace ClaudeCode.Editor.Rendering
             }
             if (numberedItems.Count >= 2)
             {
-                foreach (var item in numberedItems)
-                    AddAction(item, item);
-                return;
+                result.Kind = ActionKind.NumberedOptions;
+                result.Items = numberedItems;
+                return result;
             }
 
-            // Check for yes/no questions
+            // Check last line for question/input patterns
             var lastLine = lines[lines.Length - 1].Trim().ToLowerInvariant();
+
+            // Yes/no questions (specific prompts to act)
             if (lastLine.EndsWith("?") &&
                 (lastLine.Contains("want me to") || lastLine.Contains("should i") ||
                  lastLine.Contains("shall i") || lastLine.Contains("ready to") ||
                  lastLine.Contains("would you like")))
             {
-                AddAction("Yes, go ahead", "Yes, go ahead.");
-                AddAction("Modify plan", "I'd like to modify the plan:");
+                result.Kind = ActionKind.YesNo;
+                return result;
+            }
+
+            // Waiting for input (Claude paused to ask questions or get feedback)
+            if (lastLine.Contains("questions") || lastLine.Contains("what do you think") ||
+                lastLine.Contains("your thoughts") || lastLine.Contains("your preference") ||
+                lastLine.Contains("let me know") || lastLine.Contains("please clarify") ||
+                lastLine.Contains("which option") || lastLine.Contains("which approach"))
+            {
+                result.Kind = ActionKind.WaitingForInput;
+                return result;
+            }
+
+            return result;
+        }
+
+        private void DetectActions(string text)
+        {
+            var detected = ClassifyActions(text);
+            switch (detected.Kind)
+            {
+                case ActionKind.NumberedOptions:
+                    foreach (var item in detected.Items)
+                        AddAction(item, item);
+                    break;
+                case ActionKind.YesNo:
+                    AddAction("Yes, go ahead", "Yes, go ahead.");
+                    AddAction("Modify plan", "I'd like to modify the plan:");
+                    break;
+                case ActionKind.WaitingForInput:
+                    AddAction("Continue", "Continue, please proceed.");
+                    AddAction("I have input", "Here's my input:");
+                    break;
             }
         }
 
