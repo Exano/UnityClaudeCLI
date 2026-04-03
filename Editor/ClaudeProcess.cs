@@ -167,6 +167,8 @@ namespace ClaudeCode.Editor
                     break;
                 case PermissionMode.Plan:
                     flags += " --permission-mode plan";
+                    if (!string.IsNullOrEmpty(hookSettingsPath) && File.Exists(hookSettingsPath))
+                        flags += $" --settings \"{hookSettingsPath}\"";
                     break;
                 case PermissionMode.Default:
                     if (!string.IsNullOrEmpty(hookSettingsPath) && File.Exists(hookSettingsPath))

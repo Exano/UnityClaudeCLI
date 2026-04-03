@@ -343,6 +343,11 @@ namespace ClaudeCode.Editor
 
             string json =
                 "{\n" +
+                "  \"permissions\": {\n" +
+                "    \"allow\": [\n" +
+                "      \"mcp__unity\"\n" +
+                "    ]\n" +
+                "  },\n" +
                 "  \"hooks\": {\n" +
                 "    \"PermissionRequest\": [\n" +
                 "      {\n" +
