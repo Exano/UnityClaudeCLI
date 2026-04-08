@@ -14,8 +14,55 @@ namespace ClaudeCode.Editor.Rendering
             if (string.IsNullOrEmpty(markdown)) return container;
 
             var blocks = ParseBlocks(markdown);
+
+            // Group consecutive text-like blocks (paragraphs, headers, lists)
+            // into a single Label so users can select across them.
+            var textParts = new List<string>();
+
+            void FlushText()
+            {
+                if (textParts.Count == 0) return;
+                var label = new Label(string.Join("\n\n", textParts));
+                label.enableRichText = true;
+                label.AddToClassList("md-paragraph");
+                label.style.whiteSpace = WhiteSpace.PreWrap;
+                label.selection.isSelectable = true;
+                container.Add(label);
+                textParts.Clear();
+            }
+
             foreach (var block in blocks)
-                container.Add(RenderBlock(block));
+            {
+                switch (block.Type)
+                {
+                    case BlockType.Paragraph:
+                        textParts.Add(InlineFormat(block.Content));
+                        break;
+                    case BlockType.Header:
+                        var sizes = new[] { 20, 17, 15, 13, 12, 11 };
+                        int sz = block.Level >= 1 && block.Level <= 6 ? sizes[block.Level - 1] : 13;
+                        textParts.Add($"<size={sz}><color=#7AABFF><b>{InlineFormat(block.Content)}</b></color></size>");
+                        break;
+                    case BlockType.UnorderedList:
+                        var ul = new List<string>();
+                        foreach (var item in block.Lines)
+                            ul.Add($"  <color=#4C7EFF>\u2022</color> {InlineFormat(item)}");
+                        textParts.Add(string.Join("\n", ul));
+                        break;
+                    case BlockType.OrderedList:
+                        var ol = new List<string>();
+                        for (int i = 0; i < block.Lines.Count; i++)
+                            ol.Add($"  <color=#4C7EFF>{i + 1}.</color> {InlineFormat(block.Lines[i])}");
+                        textParts.Add(string.Join("\n", ol));
+                        break;
+                    default:
+                        FlushText();
+                        container.Add(RenderBlock(block));
+                        break;
+                }
+            }
+            FlushText();
+
             return container;
         }
 

@@ -94,7 +94,7 @@
 .md-container { }
 
 /* Paragraphs */
-.md-paragraph { white-space: normal; font-size: 13px; color: #D4D4D4; margin-bottom: 6px; }
+.md-paragraph { white-space: pre-wrap; font-size: 13px; color: #D4D4D4; margin-bottom: 6px; }
 
 /* Headers */
 .md-header { color: #7AABFF; margin-top: 12px; margin-bottom: 5px; -unity-font-style: bold; }
