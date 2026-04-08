@@ -131,21 +131,12 @@ namespace ClaudeCode.Editor
                     proc.WaitForExit(10000);
                 }
 
-                // Remove any existing unity MCP entry so we can re-register
-                // with the correct transport type
-                if (listOutput != null && listOutput.Contains("unity"))
-                {
-                    var rmCmd = "claude mcp remove --scope local unity";
-                    var rmPsi = CreateShellProcessInfo(rmCmd);
-                    rmPsi.RedirectStandardInput = false;
-                    rmPsi.Environment.Remove("CLAUDECODE");
-                    rmPsi.Environment.Remove("CLAUDE_CODE_ENTRYPOINT");
-                    using (var proc = Process.Start(rmPsi))
-                        proc.WaitForExit(10000);
-                }
+                // Look for any existing unity MCP entry pointing at our URL
+                if (listOutput != null && listOutput.Contains(mcpUrl))
+                    return null; // already registered
 
                 // Register the MCP server
-                var addCmd = $"claude mcp add --scope local --transport streamable-http unity {mcpUrl}";
+                var addCmd = $"claude mcp add --scope local --transport http unity {mcpUrl}";
                 var addPsi = CreateShellProcessInfo(addCmd);
                 addPsi.RedirectStandardInput = false;
                 addPsi.Environment.Remove("CLAUDECODE");
