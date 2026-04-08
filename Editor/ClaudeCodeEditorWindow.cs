@@ -1041,13 +1041,17 @@ namespace ClaudeCode.Editor
             }
         }
 
+        private const string k_TaskTrackingHint =
+            "[System hint: For multi-step tasks, use TodoWrite to track your progress so you can resume after interruptions or context compression.]";
+
         private string BuildPromptWithAgentContext(string prompt)
         {
             var context = AgentDiscovery.BuildContext(_selectedAgents);
-            if (string.IsNullOrEmpty(context))
-                return prompt;
+            var preamble = k_TaskTrackingHint;
+            if (!string.IsNullOrEmpty(context))
+                preamble = $"{context}\n\n{k_TaskTrackingHint}";
 
-            return $"{context}\n\n---\n\n{prompt}";
+            return $"{preamble}\n\n---\n\n{prompt}";
         }
 
         private void Record(ChatMessage.Role role, string text)
