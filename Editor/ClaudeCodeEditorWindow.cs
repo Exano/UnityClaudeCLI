@@ -5,6 +5,7 @@ using System.Text;
 using ClaudeCode.Editor.Agents;
 using ClaudeCode.Editor.Rendering;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -35,6 +36,7 @@ namespace ClaudeCode.Editor
         [SerializeField] private List<Attachment> _savedAttachments = new List<Attachment>();
         [SerializeField] private string _currentConversationId;
         [SerializeField] private string _conversationCreatedAt;
+        [SerializeField] private bool _lockReloadWhileRunning;
 
         private static Texture2D s_tabIcon;
         private static readonly string[] k_ModelChoices = { "Sonnet", "Opus" };
@@ -161,6 +163,7 @@ namespace ClaudeCode.Editor
             if (!string.IsNullOrEmpty(_lastSessionId))
                 _process.LastSessionId = _lastSessionId;
             EditorApplication.update += PollProcessOutput;
+            CompilationPipeline.compilationStarted += OnCompilationStarted;
 
             // Auto-register MCP server if Claude CLI is available
             if (_process.IsClaudeAvailable())
@@ -192,6 +195,7 @@ namespace ClaudeCode.Editor
         private void OnDisable()
         {
             EditorApplication.update -= PollProcessOutput;
+            CompilationPipeline.compilationStarted -= OnCompilationStarted;
             if (_reloadLocked)
             {
                 _reloadLocked = false;
@@ -253,6 +257,27 @@ namespace ClaudeCode.Editor
             applyBtn.AddToClassList("settings-apply-btn");
             mcpRow.Add(applyBtn);
             _settingsPanel.Add(mcpRow);
+
+            var lockRow = new VisualElement();
+            lockRow.AddToClassList("settings-row");
+            var lockToggle = new Toggle("Lock reload while running")
+            {
+                value = _lockReloadWhileRunning,
+                tooltip = "Prevents incidental domain reloads during a task. "
+                        + "Auto-releases when Unity compiles so execute_code sees new code."
+            };
+            lockToggle.RegisterValueChangedCallback(e =>
+            {
+                _lockReloadWhileRunning = e.newValue;
+                if (!_lockReloadWhileRunning && _reloadLocked)
+                {
+                    _reloadLocked = false;
+                    EditorApplication.UnlockReloadAssemblies();
+                }
+            });
+            lockRow.Add(lockToggle);
+            _settingsPanel.Add(lockRow);
+
             root.Add(_settingsPanel);
 
             // History panel (hidden by default)
@@ -1053,10 +1078,10 @@ namespace ClaudeCode.Editor
                 _activityIndicator.style.display = DisplayStyle.None;
             }
 
-            // Prevent domain reload from killing the process mid-task.
-            // LockReloadAssemblies blocks C# recompilation/reload but still allows
-            // asset imports so MCP refresh calls work normally.
-            if (running && !_reloadLocked)
+            // Opt-in lock: protects the subprocess from incidental domain reloads
+            // (asset imports, scene saves). Compile events still auto-release it
+            // (see OnCompilationStarted) so execute_code can see new assemblies.
+            if (running && _lockReloadWhileRunning && !_reloadLocked)
             {
                 _reloadLocked = true;
                 EditorApplication.LockReloadAssemblies();
@@ -1068,6 +1093,19 @@ namespace ClaudeCode.Editor
             }
 
             _wasRunning = running;
+        }
+
+        // Unity started compiling scripts (e.g., Claude just wrote a .cs file).
+        // Release the reload lock so the new assembly can load — otherwise
+        // execute_code runs against stale code. The resulting domain reload
+        // will kill the subprocess; _wasRunning triggers the auto-continue path.
+        private void OnCompilationStarted(object _)
+        {
+            if (_reloadLocked)
+            {
+                _reloadLocked = false;
+                EditorApplication.UnlockReloadAssemblies();
+            }
         }
 
         // ── Main-thread output polling ──
