@@ -609,6 +609,44 @@ namespace ClaudeCode.Editor
 
         // ── Conversation history ──
 
+        private const int k_HistoryMaxChars = 6000;
+        private const int k_MessageMaxChars = 800;
+
+        /// <summary>
+        /// Builds a context preamble from the stored chat history so Claude can
+        /// pick up where the previous (now-dead) session left off.
+        /// </summary>
+        private string BuildHistoryContext(string prompt)
+        {
+            // Collect user/assistant messages only (skip system, tool use, etc.)
+            var sb = new StringBuilder();
+            sb.AppendLine("[Previous conversation context — the original session was lost, but here is the history so you can continue where we left off]");
+            sb.AppendLine();
+
+            foreach (var msg in _messageHistory)
+            {
+                if (msg.role != ChatMessage.Role.User && msg.role != ChatMessage.Role.Claude)
+                    continue;
+                var label = msg.role == ChatMessage.Role.User ? "User" : "Assistant";
+                var text = msg.text ?? "";
+                if (text.Length > k_MessageMaxChars)
+                    text = text.Substring(0, k_MessageMaxChars) + "\u2026 [truncated]";
+                sb.AppendLine($"{label}: {text}");
+                sb.AppendLine();
+
+                if (sb.Length > k_HistoryMaxChars)
+                {
+                    sb.AppendLine("[...earlier messages truncated for brevity]");
+                    break;
+                }
+            }
+
+            sb.AppendLine("[End of previous context]");
+            sb.AppendLine();
+            sb.Append(prompt);
+            return sb.ToString();
+        }
+
         private void NewConversation()
         {
             SaveCurrentConversation();
@@ -1028,13 +1066,17 @@ namespace ClaudeCode.Editor
             }
         }
 
+        private const string k_TaskTrackingHint =
+            "[System hint: For multi-step tasks, use TodoWrite to track your progress so you can resume after interruptions or context compression.]";
+
         private string BuildPromptWithAgentContext(string prompt)
         {
             var context = AgentDiscovery.BuildContext(_selectedAgents);
-            if (string.IsNullOrEmpty(context))
-                return prompt;
+            var preamble = k_TaskTrackingHint;
+            if (!string.IsNullOrEmpty(context))
+                preamble = $"{context}\n\n{k_TaskTrackingHint}";
 
-            return $"{context}\n\n---\n\n{prompt}";
+            return $"{preamble}\n\n---\n\n{prompt}";
         }
 
         private void Record(ChatMessage.Role role, string text)
@@ -1114,6 +1156,16 @@ namespace ClaudeCode.Editor
         {
             if (_process == null) return;
 
+            // Early unlock: if the OS process already exited, release the reload
+            // lock immediately rather than waiting for the Complete chunk to be
+            // processed.  This prevents the editor from appearing frozen when
+            // EditorApplication.update is throttled (e.g. Unity is unfocused).
+            if (_reloadLocked && _process.HasProcessExited)
+            {
+                _reloadLocked = false;
+                EditorApplication.UnlockReloadAssemblies();
+            }
+
             bool dirty = false;
             bool done = false;
 
@@ -1155,6 +1207,28 @@ namespace ClaudeCode.Editor
                         Record(ChatMessage.Role.System, c.Text);
                         AddSystemBlock(c.Text);
                         break;
+
+                    case ClaudeProcess.OutputChunk.Kind.ContinueFailed:
+                        // Session is gone (e.g. PC reboot). Retry with history context.
+                        Record(ChatMessage.Role.System, "[Session expired — resuming with conversation history]");
+                        AddSystemBlock("[Session expired — resuming with conversation history]");
+                        _lastSessionId = null;
+                        if (_process != null) _process.LastSessionId = null;
+                        _continueConversation = false;
+                        if (_continueToggle != null) _continueToggle.value = false;
+                        SetRunning(false);
+                        // Re-send with history preamble on next frame
+                        var retryPrompt = BuildHistoryContext(c.Text);
+                        _inputField.schedule.Execute(() =>
+                        {
+                            BeginStreamingResponse();
+                            _process.SendMessage(retryPrompt, false, _permissionMode,
+                                k_ModelIds[_modelIndex], _maxTurns);
+                            SetRunning(true);
+                        });
+                        ScrollToBottom();
+                        Repaint();
+                        return; // drain remaining chunks on next poll
 
                     case ClaudeProcess.OutputChunk.Kind.Complete:
                         done = true;
@@ -1217,6 +1291,13 @@ namespace ClaudeCode.Editor
                     Enqueue_Complete();
                 }
             }
+
+            // Keep the editor update loop alive while the process is running.
+            // On Windows, Unity throttles EditorApplication.update when the
+            // editor is unfocused; Repaint() ensures the loop keeps ticking so
+            // we can process output and release the reload lock promptly.
+            if (_wasRunning)
+                Repaint();
         }
 
         private void Enqueue_Complete()

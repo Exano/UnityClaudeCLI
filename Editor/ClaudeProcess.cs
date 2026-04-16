@@ -17,13 +17,15 @@ namespace ClaudeCode.Editor
 
         public struct OutputChunk
         {
-            public enum Kind { Text, ToolUse, Status, Result, System, Thinking, Complete }
+            public enum Kind { Text, ToolUse, Status, Result, System, Thinking, Complete, ContinueFailed }
             public Kind Type;
             public string Text;
         }
 
         public ProcessState CurrentState { get; private set; } = ProcessState.Idle;
         public string LastSessionId { get; set; }
+        private bool _continueAttempted;
+        private string _lastPrompt;
 
         /// <summary>True if the OS process has exited (safe to call anytime).</summary>
         public bool HasProcessExited
@@ -197,6 +199,8 @@ namespace ClaudeCode.Editor
 
             CurrentState = ProcessState.Running;
             _cts = new CancellationTokenSource();
+            _continueAttempted = resume && !string.IsNullOrEmpty(LastSessionId);
+            _lastPrompt = prompt;
 
             try
             {
@@ -299,12 +303,34 @@ namespace ClaudeCode.Editor
                 string line;
                 while (!ct.IsCancellationRequested && (line = await reader.ReadLineAsync()) != null)
                 {
-                    if (!string.IsNullOrWhiteSpace(line))
-                        Enqueue(OutputChunk.Kind.System, line.Trim());
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var trimmed = line.Trim();
+
+                    // Detect --continue failure (stale session after reboot etc.)
+                    if (_continueAttempted && IsSessionNotFoundError(trimmed))
+                    {
+                        _continueAttempted = false;
+                        Enqueue(OutputChunk.Kind.ContinueFailed, _lastPrompt);
+                        return; // stop reading — caller will retry
+                    }
+
+                    Enqueue(OutputChunk.Kind.System, trimmed);
                 }
             }
             catch (OperationCanceledException) { }
             catch (ObjectDisposedException) { }
+        }
+
+        private static bool IsSessionNotFoundError(string text)
+        {
+            var lower = text.ToLowerInvariant();
+            return lower.Contains("conversation not found")
+                || lower.Contains("session not found")
+                || lower.Contains("could not find conversation")
+                || lower.Contains("could not resume")
+                || lower.Contains("no conversation found")
+                || lower.Contains("invalid conversation")
+                || (lower.Contains("error") && lower.Contains("--continue"));
         }
 
         private void ParseStreamJsonLine(string line)
