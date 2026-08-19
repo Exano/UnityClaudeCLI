@@ -30,7 +30,7 @@ namespace ClaudeCode.Editor
         [SerializeField] private bool _continueConversation = true;
         [SerializeField] private string _lastSessionId;
         [SerializeField] private bool _wasRunning;
-        [SerializeField] private int _modelIndex;     // 0 = Sonnet, 1 = Opus
+        [SerializeField] private int _modelIndex;     // index into k_ModelChoices / k_ModelIds
         [SerializeField] private int _maxTurns;        // 0 = unlimited
         [SerializeField] private string _pendingInputText;               // survives domain reload
         [SerializeField] private List<Attachment> _savedAttachments = new List<Attachment>();
@@ -39,8 +39,8 @@ namespace ClaudeCode.Editor
         [SerializeField] private bool _lockReloadWhileRunning;
 
         private static Texture2D s_tabIcon;
-        private static readonly string[] k_ModelChoices = { "Sonnet", "Opus" };
-        private static readonly string[] k_ModelIds = { "claude-sonnet-4-6", "claude-opus-4-6" };
+        private static readonly string[] k_ModelChoices = { "Sonnet", "Opus", "Fable" };
+        private static readonly string[] k_ModelIds = { "claude-sonnet-5", "claude-opus-5", "claude-fable-5" };
 
         // UI elements (rebuilt each CreateGUI)
         private ScrollView _outputScroll;
@@ -337,7 +337,9 @@ namespace ClaudeCode.Editor
                 _permissionMode = (PermissionMode)permChoices.IndexOf(e.newValue));
             optionsRow.Add(_permissionModeDropdown);
 
-            // Model selector
+            // Model selector. A serialized index can outlive the choice list (an older
+            // package version has fewer entries), so clamp before it is used to index.
+            _modelIndex = Mathf.Clamp(_modelIndex, 0, k_ModelChoices.Length - 1);
             _modelDropdown = new PopupField<string>(
                 new List<string>(k_ModelChoices), _modelIndex);
             _modelDropdown.AddToClassList("model-dropdown");

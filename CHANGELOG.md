@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.10] - 2026-08-19
+
+### Added
+- Claude Fable 5 in the model dropdown
+
+### Changed
+- Sonnet and Opus entries now point at `claude-sonnet-5` / `claude-opus-5` (were pinned to the 4-6 generation)
+
+### Fixed
+- Clamp the serialized model index so a selection made on a newer package version cannot throw when the choice list is shorter
+
 ## [0.1.3] - 2026-03-10
 
 ### Fixed
