@@ -1275,7 +1275,10 @@ namespace ClaudeCode.Editor
                 Repaint();
                 // Defer the asset refresh so the UI has time to finalize and
                 // serialized state is written before a potential domain reload.
-                EditorApplication.delayCall += () => AssetDatabase.Refresh();
+                // The nudge is what makes the deferral land while unfocused —
+                // delayCall needs an editor tick to run at all (see RefreshAssets).
+                EditorApplication.delayCall += RefreshAssets;
+                EditorApplication.QueuePlayerLoopUpdate();
                 SaveCurrentConversation();
             }
 
@@ -1317,7 +1320,18 @@ namespace ClaudeCode.Editor
             SetRunning(false);
             ScrollToBottom();
             Repaint();
+            RefreshAssets();
+        }
+
+        // Unity only scans for externally-changed files when the editor regains OS
+        // focus, so Claude's writes are invisible until the user alt-tabs. Refresh
+        // explicitly instead of waiting for that, and queue a loop iteration: the
+        // editor tick is what drives the import, the compile and the domain reload,
+        // and it does not run on its own while Unity is in the background.
+        private static void RefreshAssets()
+        {
             AssetDatabase.Refresh();
+            EditorApplication.QueuePlayerLoopUpdate();
         }
     }
 }
