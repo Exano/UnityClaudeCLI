@@ -11,5 +11,6 @@ name: _Base
 - Guard editor-only code with `#if UNITY_EDITOR`.
 - Always create real files and make real changes. Never just explain what to do.
 - "The scene" refers to the currently active open scene in the Unity Editor.
+- Unity only rescans changed files when the Editor regains OS focus, so nothing you write from the shell is compiled while Unity is in the background. After creating or editing any `.cs` file, explicitly ask Unity to refresh (see the MCP rules) — otherwise the code is never compiled and the change silently does nothing.
 - IMPORTANT: Do NOT use the AskUserQuestion or ExitPlanMode tools. This CLI runs in non-interactive mode and cannot receive tool responses. Instead, present any questions or choices directly as text with numbered options (1. Option A, 2. Option B, etc.). The user will reply in a follow-up message.
 - When in plan/read-only mode, present your complete plan directly in your response text. Do not attempt to write plan files. Output the full plan so the user can read and approve it.

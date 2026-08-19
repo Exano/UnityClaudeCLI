@@ -10,6 +10,8 @@
 
 ### Fixed
 - Clamp the serialized model index so a selection made on a newer package version cannot throw when the choice list is shorter
+- Assets are refreshed without waiting for the Editor to regain OS focus. Unity only scans for externally-changed files on focus, so scripts written while Unity sat in the background were never compiled until the user alt-tabbed
+- Agent definitions now state that rule and carry the `refresh_unity` procedure, so the model stops escalating to asset reimports and play mode when a compile appears not to happen
 
 ## [0.1.3] - 2026-03-10
 
