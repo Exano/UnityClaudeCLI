@@ -35,11 +35,13 @@ namespace ClaudeCode.Editor.Tests
             Assert.IsFalse(flags.Contains("--settings"));
         }
 
-        [Test]
-        public void BuildFlags_WithModel_ContainsModelFlag()
+        [TestCase("claude-sonnet-5")]
+        [TestCase("claude-opus-5")]
+        [TestCase("claude-fable-5")]
+        public void BuildFlags_WithModel_ContainsModelFlag(string model)
         {
-            var flags = ClaudeProcess.BuildFlags(PermissionMode.AutoApprove, "claude-sonnet-4-6", 0, false, null, null);
-            Assert.IsTrue(flags.Contains("--model claude-sonnet-4-6"));
+            var flags = ClaudeProcess.BuildFlags(PermissionMode.AutoApprove, model, 0, false, null, null);
+            Assert.IsTrue(flags.Contains($"--model {model}"));
         }
 
         [Test]
