@@ -40,7 +40,7 @@ namespace ClaudeCode.Editor
 
         private static Texture2D s_tabIcon;
         private static readonly string[] k_ModelChoices = { "Sonnet", "Opus", "Fable" };
-        private static readonly string[] k_ModelIds = { "claude-sonnet-5", "claude-opus-5", "claude-fable-5" };
+        private static readonly string[] k_ModelIds = { "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1" };
 
         // UI elements (rebuilt each CreateGUI)
         private ScrollView _outputScroll;
