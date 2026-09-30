@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.11] - 2026-09-30
+
+### Changed
+- Model entries now point at the current generation: `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-1`. The previous IDs still resolve but are listed as legacy.
+
 ## [0.1.10] - 2026-08-19
 
 ### Added
